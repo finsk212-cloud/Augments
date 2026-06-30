@@ -94,6 +94,7 @@ namespace Augments
             Register(new GrappleMasterAugment());
             Register(new BaitMasterAugment());
             Register(new SentrysResolveAugment());
+            Register(new WhipCrackerAugment());
         }
 
         private static void Register(Augment augment)
