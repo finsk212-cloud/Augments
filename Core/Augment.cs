@@ -1,0 +1,216 @@
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+using Terraria;
+using Terraria.DataStructures;
+using Terraria.ModLoader.IO;
+
+namespace Augments
+{
+	public enum AugmentRarity
+	{
+		Common,
+		Rare,
+		Epic,
+		Legendary
+	}
+
+	public enum AugmentClass
+	{
+		Universal,
+		Melee,
+		Ranged,
+		Magic,
+		Summon
+	}
+
+	// Base class for every augment in the mod. To add a new augment, make a new
+	// class that inherits from this one (see the examples in AugmentDatabase.cs).
+	public abstract class Augment
+	{
+		// Unique key used for saving/loading and for dupe-checking.
+		// Keep this short, lowercase, and STABLE - if you rename it later,
+		// anyone who already owns it will lose it on their next load.
+		public abstract string Id { get; }
+
+		public abstract string DisplayName { get; }
+		public abstract string Description { get; }
+		public abstract AugmentRarity Rarity { get; }
+		public abstract AugmentClass Class { get; }
+
+		// Debug/testing augments are never offered by RollChoices, but can
+		// still be granted directly via the /augment command.
+		public virtual bool IsDebugOnly => false;
+
+		// Additive contribution to the player's TotalFortune (see
+		// AugmentPlayer.TotalFortune), summed live across every owned augment -
+		// not separately saved. Scales every Fortune-aware chance check
+		// (e.g. Lucky Strike's proc chance) and biases RollChoices toward
+		// lucky-themed cards.
+		public virtual float FortuneBonus => 0f;
+
+		// Marks this augment as "lucky-themed" for RollChoices' Fortune bias -
+		// owning any Fortune-granting augment gives each choice-popup slot a
+		// chance to specifically try for one of these instead of a fully
+		// random pick.
+		public virtual bool IsLuckyThemed => false;
+
+		// Null means this augment isn't part of any Keystone family. A
+		// non-null value groups it with sibling augments sharing the same
+		// family string - granting one permanently locks every other augment
+		// in that family out of future RollChoices results (see
+		// AugmentPlayer.LockedKeystoneFamilies), while everything outside the
+		// family stays fully available.
+		public virtual string KeystoneFamily => null;
+
+		// When true (owned by the player, not necessarily on this augment
+		// itself), every owned augment's OnHitNPCWithItem/OnHitNPCWithProj
+		// fires a second time on a crit - see AugmentPlayer's dispatchers.
+		// Scoped specifically to those discrete on-hit reactions (debuffs,
+		// bonus strikes, heals, kill triggers); ModifyHitNPCWithItem/Proj's
+		// flat damage-bonus modifiers are untouched and never duplicated.
+		public virtual bool DuplicatesOnHitEffects => false;
+
+		// Ticks left before this augment's effect can trigger again. Cooldown-gated
+		// augments override this to expose their private cooldownRemaining field,
+		// which the cooldown indicator UI reads to know what to display.
+		public virtual int CooldownRemaining => 0;
+
+		// True if CooldownRemaining should be read as ticks-until-next-in-game-day
+		// (displayed as whole hours) rather than a simple seconds countdown.
+		public virtual bool CooldownDisplayInHours => false;
+
+		// A live numeric value to show as a status icon in the same row as the
+		// cooldown indicators (e.g. Adaptive Armor's current defense bonus).
+		// Null hides the icon. Unlike CooldownRemaining, this typically counts
+		// UP rather than down.
+		public virtual int? StatusValue => null;
+
+		// True while this augment is actively building toward some effect
+		// (e.g. Steady Hands ramping crit chance while standing still) - the
+		// charge indicator UI shows a box for this augment whenever true.
+		public virtual bool IsCharging => false;
+
+		// The current charge progress, shown as a percentage (0-100) in the
+		// charge indicator UI. Only read while IsCharging is true.
+		public virtual int ChargeIndicatorPercent => 0;
+
+		// Color for the StatusValue icon text - override to match whatever
+		// AugmentText color category the description already uses for this value.
+		public virtual Color StatusValueColor => Color.White;
+
+		// Appended right after the StatusValue number (e.g. "%" for a percentage
+		// stat like crit chance) - empty by default, matching the flat-number
+		// values (defense, etc.) most StatusValue overrides show.
+		public virtual string StatusValueSuffix => "";
+
+		// Optional icon graphic drawn inside the cooldown/status indicator box,
+		// behind the countdown/value text. Null (the default) means "no icon,
+		// just show the number" - the original indicator behavior.
+		public virtual Texture2D Icon => null;
+
+		// Fires exactly once, the instant the player picks this augment.
+		// Good for one-time setup, not for anything that needs to keep happening.
+		public virtual void OnAcquire(Player player) { }
+
+		// Fires every single game tick while the player owns this augment.
+		// This is where most "passive" effects will live (regen ticks, timers, etc).
+		public virtual void OnUpdate(Player player) { }
+
+		// Fires after vanilla run speeds are calculated for the player.
+		public virtual void PostUpdateRunSpeeds(Player player) { }
+
+		// Fires every tick, after statDefense is reset to its base/armor value
+		// but before it's finalized for the frame - the correct place to add a
+		// temporary flat defense bonus (same timing buffs/accessories use).
+		public virtual void UpdateEquips(Player player) { }
+
+		// Fires whenever the player hits an NPC with a held weapon (melee, etc).
+		// `hit` contains the finalized damage/crit info for that swing.
+		public virtual void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit) { }
+
+		// Fires whenever the player hits an NPC with a projectile. This also
+		// covers thrust-style melee weapons (short swords, spears) which
+		// register their hit through a projectile instead of a direct swing -
+		// any melee augment that reacts to hits should implement BOTH this
+		// and OnHitNPCWithItem, or it'll silently miss those weapons.
+		public virtual void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit) { }
+
+		// Fires BEFORE a melee weapon hit is finalized - use this (not the
+		// OnHit hooks above) to actually boost outgoing damage, via
+		// modifiers.FlatBonusDamage += amount. Same short-sword/spear caveat
+		// applies: implement both this and the WithProj version below.
+		public virtual void ModifyHitNPCWithItem(Player player, Item item, NPC target, ref NPC.HitModifiers modifiers) { }
+
+		// Projectile equivalent of the above (covers thrust melee weapons).
+		public virtual void ModifyHitNPCWithProj(Player player, Projectile proj, NPC target, ref NPC.HitModifiers modifiers) { }
+
+		// Fires before any damage calculation, for guaranteed/random no-cost
+		// dodges (the same hook Black Belt's own dodge runs through, per
+		// tModLoader's docs) - return true to fully negate the hit. Unlike
+		// ModifyHurt's Cancel(), a successful dodge through this hook also
+		// automatically grants vanilla's ~1.33s post-dodge invincibility
+		// window, with no extra code needed. Use ConsumableDodge instead for
+		// anything that should consume a stack/buff or have its own cooldown.
+		public virtual bool FreeDodge(Player player, Player.HurtInfo info) => false;
+
+		// Fires while incoming damage is being calculated, before it's applied -
+		// use modifiers.SetMaxDamage(limit) to cap the resulting hit (e.g. to
+		// survive a killing blow at 1 HP) rather than trying to undo the damage after the fact.
+		public virtual void ModifyHurt(Player player, ref Player.HurtModifiers modifiers) { }
+
+		// Fires right after the player takes damage from any source.
+		public virtual void OnHurt(Player player, Player.HurtInfo info) { }
+
+		// Fires right after the player takes damage from a direct NPC hit
+		// specifically (contact damage) - gives a reference to the NPC that
+		// hit them, unlike the generic OnHurt above. Does NOT fire for
+		// damage from NPC-owned projectiles (ranged enemy attacks).
+		public virtual void OnHitByNPC(Player player, NPC npc, Player.HurtInfo hurtInfo) { }
+
+		// Fires while a weapon's crit chance is being calculated.
+		public virtual void ModifyWeaponCrit(Player player, Item item, ref float crit) { }
+
+		// Allows augments to modify the life restored by healing potions.
+		public virtual void GetHealLife(Player player, Item item, bool quickHeal, ref int healValue) { }
+
+		// Fires when the player consumes an item.
+		public virtual void OnConsumeItem(Player player, Item item) { }
+
+		// Fires when an enemy kill is credited to the player.
+		public virtual void OnKillNPC(Player player, NPC npc) { }
+
+		// Fires once per fishing attempt, before vanilla rolls what (if
+		// anything) gets caught - bump attempt.fishingLevel to bias toward
+		// rarer catches, the same field actual fishing rods/bait modify.
+		public virtual void ModifyFishingAttempt(Player player, ref FishingAttempt attempt) { }
+
+		// Fires while the current fishing power is being assembled from the
+		// equipped rod and bait, before a cast resolves - add to
+		// fishingLevel here to boost it. `bait` is the actual bait Item in
+		// use (its own Item.bait field is its raw power contribution).
+		public virtual void GetFishingLevel(Player player, Item fishingRod, Item bait, ref float fishingLevel) { }
+
+		// Fires once, the instant any projectile is spawned by this player -
+		// covers minions, sentries, thrown weapons, everything. Distinct
+		// from OnHitNPCWithProj (which only fires on a landed hit) since
+		// some properties (e.g. a sentry's total lifespan) need to be set
+		// once at spawn, not reacted to per-hit.
+		public virtual void OnProjectileSpawn(Player player, Projectile projectile) { }
+
+		// Augment instances are recreated fresh every mod load, so any custom
+		// persistent stat (e.g. Lucky Find's lifetime coin counter) needs to be
+		// explicitly written here and restored via LoadCustomData below -
+		// AugmentPlayer handles calling these into/out of a per-augment sub-tag.
+		public virtual void SaveCustomData(TagCompound tag) { }
+		public virtual void LoadCustomData(TagCompound tag) { }
+
+		// Fires while a spell's mana cost is being calculated, before it's
+		// spent - `mult` scales the cost (mult = 0f means free for that cast).
+		public virtual void ModifyManaCost(Player player, Item item, ref float reduce, ref float mult) { }
+
+		// Fires when a ranged weapon is about to consume ammo for a shot -
+		// return false to skip consuming that ammo this shot. Default true
+		// (consume normally).
+		public virtual bool CanConsumeAmmo(Player player, Item weapon, Item ammo) => true;
+	}
+}

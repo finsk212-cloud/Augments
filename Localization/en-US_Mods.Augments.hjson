@@ -1,0 +1,30 @@
+Keybinds: {
+	OpenAugmentList.DisplayName: Open Augment List
+	DebugTriggerPopup.DisplayName: Debug Trigger Popup
+	DebugSpawnVendor.DisplayName: Debug Spawn Vendor
+	DebugToggleShop.DisplayName: Debug Toggle Shop
+}
+
+NPCs: {
+	AugmentVendorNPC: {
+		DisplayName: Augment Vendor N P C
+
+		TownNPCMood: {
+			Content: I am content.
+			NoHome: I hate not having a home.
+			FarFromHome: I am too far from home.
+			LoveSpace: I love having so much space.
+			DislikeCrowded: I dislike how crowded I am.
+			HateCrowded: I hate how crowded I am.
+			LikeNPC_Princess: I like {NPCName}.
+			Princess_LovesNPC: I like {NPCName}.
+		}
+	}
+}
+
+Items: {
+	AugmentEssenceItem: {
+		DisplayName: Augment Essence Item
+		Tooltip: ""
+	}
+}

@@ -1,0 +1,24 @@
+namespace Augments
+{
+    public static class AugmentText
+    {
+        public static string Color(string text, string hex)
+        {
+            return $"[c/{hex}:{text}]";
+        }
+
+        public static string Trigger(string text) => Color(text, AugmentTextColors.TriggerHex);
+        public static string Healing(string text) => Color(text, AugmentTextColors.HealingHex);
+        public static string HP(string text) => Color(text, AugmentTextColors.HealingHex);
+        public static string Crit(string text) => Color(text, AugmentTextColors.CritHex);
+        public static string BonusDamage(string text) => Color(text, AugmentTextColors.BonusDamageHex);
+        public static string Ichor(string text) => Color(text, AugmentTextColors.IchorHex);
+        public static string Mana(string text) => Color(text, AugmentTextColors.ManaHex);
+        public static string Cooldown(string text) => Color(text, AugmentTextColors.CooldownHex);
+        public static string Duration(string text) => Color(text, AugmentTextColors.DurationHex);
+        public static string SpecialDamage(string text) => Color(text, AugmentTextColors.SpecialDamageHex);
+        public static string Immobilize(string text) => Color(text, AugmentTextColors.ImmobilizeHex);
+        public static string Frostburn(string text) => Color(text, AugmentTextColors.FrostburnHex);
+        public static string MovementSpeed(string text) => Color(text, AugmentTextColors.MovementSpeedHex);
+    }
+}

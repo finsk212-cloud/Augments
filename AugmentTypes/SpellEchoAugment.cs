@@ -1,0 +1,23 @@
+using Terraria;
+
+namespace Augments
+{
+    public class SpellEchoAugment : Augment
+    {
+        public override string Id => "spell_echo";
+        public override string DisplayName => "Spell Echo";
+        public override string Description =>
+            $"{AugmentText.Mana("25% chance")} per cast to not consume any mana.";
+
+        public override AugmentRarity Rarity => AugmentRarity.Rare;
+        public override AugmentClass Class => AugmentClass.Magic;
+
+        private const float ProcChance = 0.25f;
+
+        public override void ModifyManaCost(Player player, Item item, ref float reduce, ref float mult)
+        {
+            if (Main.rand.NextFloat() < ProcChance)
+                mult = 0f;
+        }
+    }
+}

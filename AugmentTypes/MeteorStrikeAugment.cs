@@ -1,0 +1,51 @@
+using Microsoft.Xna.Framework;
+using Terraria;
+
+namespace Augments
+{
+    public class MeteorStrikeAugment : Augment
+    {
+        public override string Id => "meteor_strike";
+        public override string DisplayName => "Meteor Strike";
+        public override string Description =>
+            $"{AugmentText.Crit("Crits")} against bosses have a 15% chance to call down a bonus strike " +
+            $"dealing {AugmentText.Color("2.5%", "FFFF00")} of the boss's {AugmentText.HP("maximum HP")}.";
+
+        public override AugmentRarity Rarity => AugmentRarity.Epic;
+        public override AugmentClass Class => AugmentClass.Universal;
+
+        private const float ProcChance = 0.15f;
+        private const float BonusDamagePercentOfMaxHP = 0.025f;
+
+        public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
+        {
+            if (hit.Crit && target.boss && Main.rand.NextFloat() < ProcChance)
+                Strike(player, target);
+        }
+
+        public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
+        {
+            if (hit.Crit && target.boss && Main.rand.NextFloat() < ProcChance)
+                Strike(player, target);
+        }
+
+        // Built manually (instead of SimpleStrikeNPC) so the combat text can be
+        // forced to yellow - HideCombatText suppresses the auto popup and we
+        // spawn our own via CombatText.NewText.
+        private static void Strike(Player player, NPC target)
+        {
+            int damage = (int)(target.lifeMax * BonusDamagePercentOfMaxHP);
+
+            var hit = new NPC.HitInfo
+            {
+                Damage = damage,
+                SourceDamage = damage,
+                HitDirection = player.direction,
+                HideCombatText = true
+            };
+
+            target.StrikeNPC(hit);
+            CombatText.NewText(target.Hitbox, Color.Yellow, damage);
+        }
+    }
+}

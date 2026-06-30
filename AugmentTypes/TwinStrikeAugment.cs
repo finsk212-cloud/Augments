@@ -1,0 +1,89 @@
+using Terraria;
+
+namespace Augments
+{
+    public class TwinStrikeAugment : Augment
+    {
+        public override string Id => "twin_strike";
+        public override string DisplayName => "Twin Strike";
+        public override string Description =>
+            $"{AugmentText.Crit("Crits")} apply {AugmentText.Trigger("on-hit")} twice. Deal {AugmentText.SpecialDamage("15 damage")} {AugmentText.Trigger("on-hit")}.";
+
+        public override AugmentRarity Rarity => AugmentRarity.Rare;
+        public override AugmentClass Class => AugmentClass.Universal;
+
+        // The crit-doubling effect itself has no logic of its own - it's
+        // entirely this flag, read by AugmentPlayer's OnHitNPCWithItem/Proj
+        // dispatchers. The 15-damage proc below is a separate, independent
+        // effect on top of that, not part of the doubling.
+        public override bool DuplicatesOnHitEffects => true;
+
+        private const int ProcDamage = 15;
+
+        // The 15-damage proc fires on every hit, crit or not - only the
+        // CRIT-doubling pass is conditional. Owning Twin Strike guarantees
+        // the dispatcher's second pass always fires on a crit
+        // (DuplicatesOnHitEffects is this augment's own flag), so on a crit
+        // specifically, OnHitNPCWithItem/Proj below is always called exactly
+        // twice. Rather than popping two separate +15s on a crit, the first
+        // call deals the full doubled amount immediately and this guard
+        // makes the second call a no-op, so a crit reads as one combined +30.
+        private bool itemProcPending;
+        private bool projProcPending;
+
+        // Not restricted by DamageClass. Built manually (instead of
+        // SimpleStrikeNPC) so the combat text can be forced to the same blue
+        // used for Iron Rhythm's popup - HideCombatText suppresses the auto
+        // popup and CombatText.NewText spawns our own, same pattern as
+        // MeteorStrikeAugment.
+        public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
+        {
+            if (!hit.Crit)
+            {
+                Strike(player, target, ProcDamage);
+                return;
+            }
+
+            if (itemProcPending)
+            {
+                itemProcPending = false;
+                return;
+            }
+
+            itemProcPending = true;
+            Strike(player, target, ProcDamage * 2);
+        }
+
+        public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
+        {
+            if (!hit.Crit)
+            {
+                Strike(player, target, ProcDamage);
+                return;
+            }
+
+            if (projProcPending)
+            {
+                projProcPending = false;
+                return;
+            }
+
+            projProcPending = true;
+            Strike(player, target, ProcDamage * 2);
+        }
+
+        private static void Strike(Player player, NPC target, int damage)
+        {
+            var hit = new NPC.HitInfo
+            {
+                Damage = damage,
+                SourceDamage = damage,
+                HitDirection = player.direction,
+                HideCombatText = true
+            };
+
+            target.StrikeNPC(hit);
+            CombatText.NewText(target.Hitbox, AugmentTextColors.SpecialDamage, damage);
+        }
+    }
+}
