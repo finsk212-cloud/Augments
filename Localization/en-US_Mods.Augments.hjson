@@ -28,3 +28,8 @@ Items: {
 		Tooltip: ""
 	}
 }
+
+Projectiles: {
+	EchoingStrikeProjectile.DisplayName: Echoing Strike Projectile
+	GodslayerSwordProjectile.DisplayName: Godslayer Sword Projectile
+}

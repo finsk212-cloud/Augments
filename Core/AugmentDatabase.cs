@@ -95,6 +95,13 @@ namespace Augments
             Register(new BaitMasterAugment());
             Register(new SentrysResolveAugment());
             Register(new WhipCrackerAugment());
+            Register(new WhipMasterAugment());
+            Register(new QuickcastAugment());
+            Register(new WandDisciplineAugment());
+            Register(new FrenziedAssaultAugment());
+            Register(new MomentumCrashAugment());
+            Register(new TrophyHunterAugment());
+            Register(new GodslayerBladeAugment());
         }
 
         private static void Register(Augment augment)
