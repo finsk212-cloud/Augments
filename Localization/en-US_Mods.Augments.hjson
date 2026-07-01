@@ -29,7 +29,23 @@ Items: {
 	}
 }
 
+Buffs: {
+	WarCryBuff: {
+		DisplayName: Warcry
+		Description: Dealing increased damage.
+	}
+}
+
 Projectiles: {
 	EchoingStrikeProjectile.DisplayName: Echoing Strike Projectile
 	GodslayerSwordProjectile.DisplayName: Godslayer Sword Projectile
+	AstralCollapseMarkerProjectile.DisplayName: Astral Collapse Marker Projectile
+	AstralStarProjectile.DisplayName: Astral Star Projectile
+	ArcaneSingularityVortexProjectile.DisplayName: Arcane Singularity Vortex Projectile
+	QueensVoidBugProjectile.DisplayName: Queens Void Bug Projectile
+	RicochetEngineProjectile.DisplayName: Ricochet Engine Projectile
+	NecromancerGhostProjectile.DisplayName: Necromancer Ghost Projectile
+	EldritchEyeProjectile.DisplayName: Eldritch Eye Projectile
+	EldritchLaserProjectile.DisplayName: Eldritch Laser Projectile
+	WarGodShockwaveProjectile.DisplayName: War God Shockwave Projectile
 }

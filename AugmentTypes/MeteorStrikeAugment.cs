@@ -20,21 +20,21 @@ namespace Augments
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
             if (hit.Crit && target.boss && Main.rand.NextFloat() < ProcChance)
-                Strike(player, target);
+                Strike(player, target, HitEffectiveness);
         }
 
         public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
         {
             if (hit.Crit && target.boss && Main.rand.NextFloat() < ProcChance)
-                Strike(player, target);
+                Strike(player, target, HitEffectiveness);
         }
 
         // Built manually (instead of SimpleStrikeNPC) so the combat text can be
         // forced to yellow - HideCombatText suppresses the auto popup and we
         // spawn our own via CombatText.NewText.
-        private static void Strike(Player player, NPC target)
+        private static void Strike(Player player, NPC target, float effectiveness)
         {
-            int damage = (int)(target.lifeMax * BonusDamagePercentOfMaxHP);
+            int damage = System.Math.Max(1, (int)(target.lifeMax * BonusDamagePercentOfMaxHP * effectiveness));
 
             var hit = new NPC.HitInfo
             {

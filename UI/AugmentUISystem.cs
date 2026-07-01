@@ -65,8 +65,8 @@ namespace Augments
 			// Insertion order matters here: each Insert places its layer
 			// immediately before whatever currently sits at mouseTextIndex.
 			// So the layer inserted FIRST in code ends up drawn LAST (on top).
-			// We want: List UI (bottom) -> Shop UI -> Choice UI -> Charges -> Cooldowns -> Tooltip (top) -> Mouse Text.
-			// So in code: insert Tooltip first, then Cooldowns, then Charges, then Choice UI, then Shop UI, then List UI last.
+			// We want: Auras (bottom) -> List UI -> Shop UI -> Choice UI -> Charges -> Cooldowns -> Tooltip (top) -> Mouse Text.
+			// So in code: insert Tooltip first, ..., List UI, then Auras last.
 			layers.Insert(mouseTextIndex, new LegacyGameInterfaceLayer(
 				"Augments: Tooltip",
 				delegate
@@ -128,6 +128,19 @@ namespace Augments
 					return true;
 				},
 				InterfaceScaleType.UI)
+			);
+
+			// Inserted last = drawn first = beneath all UI panels but above the game world.
+			// Uses InterfaceScaleType.Game so the spriteBatch gets the camera matrix
+			// and AugmentAuraDrawer can pass world coordinates directly.
+			layers.Insert(mouseTextIndex, new LegacyGameInterfaceLayer(
+				"Augments: Auras",
+				delegate
+				{
+					AugmentAuraDrawer.DrawAuras(Main.spriteBatch);
+					return true;
+				},
+				InterfaceScaleType.Game)
 			);
 		}
 

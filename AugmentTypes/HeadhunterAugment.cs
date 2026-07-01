@@ -19,13 +19,13 @@ namespace Augments
 
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
-            if (hit.Crit && item.DamageType == DamageClass.Ranged && CanExecute(target))
+            if (hit.Crit && item.DamageType == DamageClass.Ranged && CanExecute(target) && PassesHitEffectivenessRoll())
                 Execute(player, target);
         }
 
         public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
         {
-            if (hit.Crit && proj.DamageType == DamageClass.Ranged && CanExecute(target))
+            if (hit.Crit && proj.DamageType == DamageClass.Ranged && CanExecute(target) && PassesHitEffectivenessRoll())
                 Execute(player, target);
         }
 

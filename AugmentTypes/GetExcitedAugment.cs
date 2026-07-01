@@ -22,13 +22,13 @@ namespace Augments
 
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
-            if (target.life <= 0)
+            if (target.life <= 0 && PassesHitEffectivenessRoll())
                 TriggerEffect();
         }
 
         public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
         {
-            if (target.life <= 0)
+            if (target.life <= 0 && PassesHitEffectivenessRoll())
                 TriggerEffect();
         }
 

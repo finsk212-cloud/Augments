@@ -19,7 +19,7 @@ namespace Augments
         private const float CritPerStack = 2f;
 
         private int lastTargetWhoAmI = -1;
-        private int hitStacks;
+        private float hitStacks;
 
         // Shows "+X%" in the cooldown/status row while stacks are active,
         // same StatusValue mechanism ScavengersLuckAugment uses for its crit
@@ -49,11 +49,11 @@ namespace Augments
             if (target.whoAmI == lastTargetWhoAmI)
             {
                 if (hitStacks < MaxStacks)
-                    hitStacks++;
+                    hitStacks += HitEffectiveness;
             }
             else
             {
-                hitStacks = 1;
+                hitStacks = HitEffectiveness;
                 lastTargetWhoAmI = target.whoAmI;
             }
         }

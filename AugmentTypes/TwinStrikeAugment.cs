@@ -40,7 +40,7 @@ namespace Augments
         {
             if (!hit.Crit)
             {
-                Strike(player, target, ProcDamage);
+                Strike(player, target, ScaleHitEffect(ProcDamage));
                 return;
             }
 
@@ -51,14 +51,14 @@ namespace Augments
             }
 
             itemProcPending = true;
-            Strike(player, target, ProcDamage * 2);
+            Strike(player, target, ScaleHitEffect(ProcDamage * 2));
         }
 
         public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
         {
             if (!hit.Crit)
             {
-                Strike(player, target, ProcDamage);
+                Strike(player, target, ScaleHitEffect(ProcDamage));
                 return;
             }
 
@@ -69,7 +69,7 @@ namespace Augments
             }
 
             projProcPending = true;
-            Strike(player, target, ProcDamage * 2);
+            Strike(player, target, ScaleHitEffect(ProcDamage * 2));
         }
 
         private static void Strike(Player player, NPC target, int damage)

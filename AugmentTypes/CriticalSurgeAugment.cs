@@ -23,13 +23,13 @@ namespace Augments
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
             if (hit.Crit && Main.rand.NextFloat() < ProcChance)
-                Strike(player, target, (int)(item.damage * BonusDamagePercent));
+                Strike(player, target, ScaleHitEffect((int)(item.damage * BonusDamagePercent)));
         }
 
         public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
         {
             if (hit.Crit && Main.rand.NextFloat() < ProcChance)
-                Strike(player, target, (int)(proj.damage * BonusDamagePercent));
+                Strike(player, target, ScaleHitEffect((int)(proj.damage * BonusDamagePercent)));
         }
 
         private static void Strike(Player player, NPC target, int damage)

@@ -21,13 +21,13 @@ namespace Augments
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
             if (hit.Crit && Main.rand.NextFloat() < ProcChance * (1f + player.GetModPlayer<AugmentPlayer>().TotalFortune))
-                target.SimpleStrikeNPC(hit.Damage, player.direction);
+                target.SimpleStrikeNPC(ScaleHitEffect(hit.Damage), player.direction);
         }
 
         public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
         {
             if (hit.Crit && Main.rand.NextFloat() < ProcChance * (1f + player.GetModPlayer<AugmentPlayer>().TotalFortune))
-                target.SimpleStrikeNPC(hit.Damage, player.direction);
+                target.SimpleStrikeNPC(ScaleHitEffect(hit.Damage), player.direction);
         }
     }
 }

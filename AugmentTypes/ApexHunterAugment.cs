@@ -21,7 +21,7 @@ namespace Augments
         // Tracked per-player (this augment instance), not per-target - the
         // mark only ever matters against whichever single boss is currently
         // being fought, so there's no need to key it by target.whoAmI.
-        private int markStacks;
+        private float markStacks;
 
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
@@ -40,20 +40,20 @@ namespace Augments
             if (markStacks >= MaxMarkStacks)
             {
                 markStacks = 0;
-                Strike(player, target);
+                Strike(player, target, HitEffectiveness);
             }
             else
             {
-                markStacks++;
+                markStacks += HitEffectiveness;
             }
         }
 
         // Built manually (instead of SimpleStrikeNPC) so the combat text can be
         // forced to yellow - HideCombatText suppresses the auto popup and we
         // spawn our own via CombatText.NewText, same as MeteorStrikeAugment.
-        private static void Strike(Player player, NPC target)
+        private static void Strike(Player player, NPC target, float effectiveness)
         {
-            int damage = (int)(target.lifeMax * BurstPercentOfMaxHP);
+            int damage = System.Math.Max(1, (int)(target.lifeMax * BurstPercentOfMaxHP * effectiveness));
 
             var hit = new NPC.HitInfo
             {

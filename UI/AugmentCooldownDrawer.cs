@@ -76,6 +76,27 @@ namespace Augments
                 }
             }
 
+            // Icons for aura effects received from a nearby Support player.
+            // Warcry: the ModBuff being active is the source of truth.
+            // Ironclad Aura: the flag is set each UpdateEquips tick by the pull loop.
+            if (Main.LocalPlayer.FindBuffIndex(ModContent.BuffType<WarCryBuff>()) >= 0)
+            {
+                icons.Add(new StatusIcon(
+                    "+10%",
+                    AugmentTextColors.BonusDamage,
+                    "Warcry: +10% damage from nearby ally",
+                    null));
+            }
+
+            if (augmentPlayer.ReceivedIroncladAura)
+            {
+                icons.Add(new StatusIcon(
+                    "+8",
+                    AugmentTextColors.SpecialDamage,
+                    "Ironclad Aura: +8 defense from nearby ally",
+                    null));
+            }
+
             if (icons.Count == 0)
                 return;
 

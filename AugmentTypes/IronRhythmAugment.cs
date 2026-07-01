@@ -1,3 +1,4 @@
+using System;
 using Terraria;
 using Terraria.ModLoader;
 
@@ -16,17 +17,22 @@ namespace Augments
         private const int HitsRequired = 4;
         private const int BonusDamage = 15;
 
-        private int hitCounter;
-        private bool showSpecialDamageText;
+        private float hitCounter;
+        private int pendingSpecialDamage;
 
         public override void ModifyHitNPCWithItem(Player player, Item item, NPC target, ref NPC.HitModifiers modifiers)
         {
-            TryApplyBonus(ref modifiers);
+            TryApplyBonus(ref modifiers, 1f);
         }
 
         public override void ModifyHitNPCWithProj(Player player, Projectile proj, NPC target, ref NPC.HitModifiers modifiers)
         {
-            TryApplyBonus(ref modifiers);
+            TryApplyBonus(ref modifiers, 1f);
+        }
+
+        public override void ModifyHitNPCWithProj(Player player, Projectile proj, NPC target, ref NPC.HitModifiers modifiers, AugmentHitSource source, float effectiveness)
+        {
+            TryApplyBonus(ref modifiers, effectiveness);
         }
 
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
@@ -39,31 +45,31 @@ namespace Augments
             TryShowSpecialDamageText(target);
         }
 
-        private void TryApplyBonus(ref NPC.HitModifiers modifiers)
+        private void TryApplyBonus(ref NPC.HitModifiers modifiers, float effectiveness)
         {
-            hitCounter++;
+            hitCounter += effectiveness;
 
             if (hitCounter >= HitsRequired)
             {
-                hitCounter = 0;
-                showSpecialDamageText = true;
-                modifiers.FlatBonusDamage += BonusDamage;
+                hitCounter -= HitsRequired;
+                pendingSpecialDamage = Math.Max(1, (int)(BonusDamage * effectiveness));
+                modifiers.FlatBonusDamage += pendingSpecialDamage;
             }
         }
 
         private void TryShowSpecialDamageText(NPC target)
         {
-            if (!showSpecialDamageText)
+            if (pendingSpecialDamage <= 0)
                 return;
-
-            showSpecialDamageText = false;
 
             CombatText.NewText(
                 target.Hitbox,
                 AugmentTextColors.SpecialDamage,
-                $"{BonusDamage}",
+                $"{pendingSpecialDamage}",
                 true
             );
+
+            pendingSpecialDamage = 0;
         }
     }
 }

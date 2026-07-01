@@ -18,6 +18,7 @@ namespace Augments
 
         public override void SetDefaults()
         {
+            Projectile.GetGlobalProjectile<AugmentProjectileTag>().IsAugmentProcDamage = true;
             Projectile.width = 36;
             Projectile.height = 64;
             Projectile.friendly = true;

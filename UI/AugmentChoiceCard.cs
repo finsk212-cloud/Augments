@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using ReLogic.Graphics;
+using Terraria;
 using Terraria.Audio;
 using Terraria.GameContent;
 using Terraria.GameContent.UI.Elements;
@@ -39,6 +40,13 @@ namespace Augments
 		private static readonly Vector2 KeystoneTagScale = new Vector2(0.6f);
 		private static readonly Color KeystoneTagColor = new Color(220, 60, 60);
 
+		// Tag drawn at the bottom of Support cards to communicate the class
+		// identity before the player clicks. Hover reveals the stance table.
+		private const string SupportTagText = "SUPPORT CLASS";
+		private const float SupportTagSpacing = 8f;
+		private static readonly Vector2 SupportTagScale = new Vector2(0.65f);
+		private static readonly Color SupportTagColor = new Color(100, 220, 140);
+
 		// Higher rarity = faster/brighter border pulse. Index matches AugmentRarity.
 		private static readonly float[] PulseSpeed = { 0f, 1.6f, 2.4f, 3.4f };
 		private static readonly float[] PulseStrength = { 0f, 0.18f, 0.32f, 0.5f };
@@ -46,6 +54,7 @@ namespace Augments
 		private readonly List<string> nameLines;
 		private readonly List<string> descLines;
 		private readonly bool isKeystone;
+		private readonly bool isSupport;
 		private readonly Color baseBorderColor;
 		private readonly float pulseSpeed;
 		private readonly float pulseStrength;
@@ -55,6 +64,7 @@ namespace Augments
 		{
 			Augment = augment;
 			isKeystone = augment.KeystoneFamily != null;
+			isSupport = augment.Class == AugmentClass.Support;
 
 			baseBorderColor = RarityColor(augment.Rarity);
 			BackgroundColor = baseBorderColor * 0.35f;
@@ -132,6 +142,29 @@ namespace Augments
 			y = DrawCenteredLines(spriteBatch, font, nameLines, NameScale, centerX, y);
 			y += NameDescSpacing;
 			DrawLeftAlignedLines(spriteBatch, font, descLines, DescScale, inner.X, y);
+
+			if (isSupport)
+			{
+				Vector2 tagSize = ChatManager.GetStringSize(font, SupportTagText, SupportTagScale);
+				float tagY = inner.Y + inner.Height - (tagSize.Y + SupportTagSpacing);
+
+				ChatManager.DrawColorCodedStringWithShadow(
+					spriteBatch,
+					font,
+					SupportTagText,
+					new Vector2(centerX - tagSize.X / 2f, tagY),
+					SupportTagColor,
+					0f,
+					Vector2.Zero,
+					SupportTagScale
+				);
+
+				// NOTE: tooltip is drawn in DrawSelf, same depth as the card.
+				// If another card renders after this one in the same container it
+				// could paint over the tooltip box. Flag for review if observed.
+				if (IsMouseHovering)
+					DrawSupportTooltip(spriteBatch, font);
+			}
 		}
 
 		private static float DrawCenteredLines(SpriteBatch spriteBatch, DynamicSpriteFont font, List<string> lines, Vector2 scale, float centerX, float y)
@@ -176,6 +209,62 @@ namespace Augments
 			}
 
 			return y;
+		}
+
+		private static void DrawSupportTooltip(SpriteBatch spriteBatch, DynamicSpriteFont font)
+		{
+			const float padding = 10f;
+			const float lineSpacing = 2f;
+
+			var lines = new (string Text, Color Color)[]
+			{
+				("Support Stance",                    SupportTagColor),
+				("2 augments: -30% damage, +20 defense", Color.White),
+				("3 augments: -23% damage, +30 defense", Color.White),
+				("4 augments: -16% damage, +40 defense", Color.White),
+				("5 augments: -10% damage, +50 defense", Color.White),
+				("6+ augments:  -5% damage, +60 defense", Color.White),
+			};
+
+			var scale = Vector2.One;
+
+			float maxWidth = 0f;
+			float totalHeight = 0f;
+			foreach (var (text, _) in lines)
+			{
+				Vector2 size = ChatManager.GetStringSize(font, text, scale);
+				if (size.X > maxWidth) maxWidth = size.X;
+				totalHeight += size.Y + lineSpacing;
+			}
+			totalHeight -= lineSpacing;
+
+			float boxWidth = maxWidth + padding * 2f;
+			float boxHeight = totalHeight + padding * 2f;
+
+			Vector2 boxPos = new Vector2(
+				Main.MouseScreen.X - 24f - boxWidth,
+				Main.MouseScreen.Y + 24f
+			);
+
+			var boxRect = new Rectangle((int)boxPos.X, (int)boxPos.Y, (int)boxWidth, (int)boxHeight);
+
+			spriteBatch.Draw(TextureAssets.MagicPixel.Value, boxRect, new Color(20, 25, 50) * 0.95f);
+
+			const int border = 2;
+			Color borderColor = Color.White * 0.5f;
+			spriteBatch.Draw(TextureAssets.MagicPixel.Value, new Rectangle(boxRect.X, boxRect.Y, boxRect.Width, border), borderColor);
+			spriteBatch.Draw(TextureAssets.MagicPixel.Value, new Rectangle(boxRect.X, boxRect.Bottom - border, boxRect.Width, border), borderColor);
+			spriteBatch.Draw(TextureAssets.MagicPixel.Value, new Rectangle(boxRect.X, boxRect.Y, border, boxRect.Height), borderColor);
+			spriteBatch.Draw(TextureAssets.MagicPixel.Value, new Rectangle(boxRect.Right - border, boxRect.Y, border, boxRect.Height), borderColor);
+
+			float y = boxRect.Y + padding;
+			float x = boxRect.X + padding;
+			foreach (var (text, color) in lines)
+			{
+				Vector2 size = ChatManager.GetStringSize(font, text, scale);
+				ChatManager.DrawColorCodedStringWithShadow(spriteBatch, font, text, new Vector2(x, y), color, 0f, Vector2.Zero, scale);
+				y += size.Y + lineSpacing;
+			}
 		}
 
 		public override void LeftClick(UIMouseEvent evt)

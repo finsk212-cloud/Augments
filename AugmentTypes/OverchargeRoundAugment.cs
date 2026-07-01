@@ -20,7 +20,7 @@ namespace Augments
         private const int BaseDamage = 5;
         private const int DamagePerStack = 3;
 
-        private int hitStacks;
+        private float hitStacks;
         private int resetTimer;
 
         public override void OnUpdate(Player player)
@@ -50,16 +50,17 @@ namespace Augments
             if (resetTimer > 0)
             {
                 if (hitStacks < MaxStacks)
-                    hitStacks++;
+                    hitStacks += HitEffectiveness;
             }
             else
             {
-                hitStacks = 1;
+                hitStacks = HitEffectiveness;
             }
 
             resetTimer = ResetWindowTicks;
 
-            Strike(player, target, BaseDamage + hitStacks * DamagePerStack);
+            int damage = (int)((BaseDamage + hitStacks * DamagePerStack) * HitEffectiveness);
+            Strike(player, target, System.Math.Max(1, damage));
         }
 
         // Built manually (instead of plain SimpleStrikeNPC) so the combat

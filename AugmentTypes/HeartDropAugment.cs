@@ -20,22 +20,22 @@ namespace Augments
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
             if (target.life <= 0)
-                TryDropHeart(player, target);
+                TryDropHeart(player, target, HitEffectiveness);
         }
 
         public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
         {
             if (target.life <= 0)
-                TryDropHeart(player, target);
+                TryDropHeart(player, target, HitEffectiveness);
         }
 
-        private static void TryDropHeart(Player player, NPC target)
+        private static void TryDropHeart(Player player, NPC target, float effectiveness)
         {
             if (target.friendly || player.statLife >= player.statLifeMax2 ||
                 !player.GetModPlayer<AugmentPlayer>().HasAugment("heart_drop"))
                 return;
 
-            if (Main.rand.NextFloat() < ExtraHeartDropChance)
+            if (Main.rand.NextFloat() < ExtraHeartDropChance * effectiveness)
             {
                 Item.NewItem(target.GetSource_Loot(), target.Hitbox, ItemID.Heart);
             }

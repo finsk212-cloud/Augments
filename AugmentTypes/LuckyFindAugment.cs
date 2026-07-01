@@ -35,18 +35,18 @@ namespace Augments
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
             if (target.life <= 0)
-                TryDropCoins(player, target);
+                TryDropCoins(player, target, HitEffectiveness);
         }
 
         public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
         {
             if (target.life <= 0)
-                TryDropCoins(player, target);
+                TryDropCoins(player, target, HitEffectiveness);
         }
 
-        private void TryDropCoins(Player player, NPC target)
+        private void TryDropCoins(Player player, NPC target, float effectiveness)
         {
-            float chance = DropChance * (1f + player.GetModPlayer<AugmentPlayer>().TotalFortune);
+            float chance = DropChance * (1f + player.GetModPlayer<AugmentPlayer>().TotalFortune) * effectiveness;
             if (Main.rand.NextFloat() >= chance)
                 return;
 

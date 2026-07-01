@@ -38,18 +38,18 @@ namespace Augments
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
             if (Main.bloodMoon)
-                Lifesteal(player, hit.Damage);
+                Lifesteal(player, hit.Damage, HitEffectiveness);
         }
 
         public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
         {
             if (Main.bloodMoon)
-                Lifesteal(player, hit.Damage);
+                Lifesteal(player, hit.Damage, HitEffectiveness);
         }
 
-        private static void Lifesteal(Player player, int damageDealt)
+        private static void Lifesteal(Player player, int damageDealt, float effectiveness)
         {
-            int healAmount = (int)(damageDealt * BloodMoonLifestealPercent);
+            int healAmount = (int)(damageDealt * BloodMoonLifestealPercent * effectiveness);
             if (healAmount <= 0)
                 return;
 

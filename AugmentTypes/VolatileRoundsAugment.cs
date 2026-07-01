@@ -44,13 +44,13 @@ namespace Augments
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
             if (item.DamageType == DamageClass.Ranged && HasDamagingDot(target))
-                Explode(target, hit.Damage);
+                Explode(target, hit.Damage, HitEffectiveness);
         }
 
         public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
         {
             if (proj.DamageType == DamageClass.Ranged && HasDamagingDot(target))
-                Explode(target, hit.Damage);
+                Explode(target, hit.Damage, HitEffectiveness);
         }
 
         private static bool HasDamagingDot(NPC target)
@@ -70,9 +70,9 @@ namespace Augments
         // Same uncapped nearby-enemy search shape as ChainLightningAugment/
         // TimeWarpAugment, dealing a flat fraction of the triggering hit's
         // damage to everything in range (including the original target).
-        private static void Explode(NPC origin, int hitDamage)
+        private static void Explode(NPC origin, int hitDamage, float effectiveness)
         {
-            int damage = (int)(hitDamage * ExplosionDamagePercent);
+            int damage = System.Math.Max(1, (int)(hitDamage * ExplosionDamagePercent * effectiveness));
 
             foreach (NPC npc in Main.npc)
             {

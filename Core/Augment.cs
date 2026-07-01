@@ -20,13 +20,34 @@ namespace Augments
 		Melee,
 		Ranged,
 		Magic,
-		Summon
+		Summon,
+		Support
+	}
+
+	public enum AugmentHitSource
+	{
+		NormalAttack,
+		AugmentProc
 	}
 
 	// Base class for every augment in the mod. To add a new augment, make a new
 	// class that inherits from this one (see the examples in AugmentDatabase.cs).
 	public abstract class Augment
 	{
+		// Set only while a legacy hit hook is being dispatched. Existing augments
+		// can use this to scale numeric progress, damage, duration, or chance when
+		// an explicitly permitted augment proc (such as Echo Chamber) hits.
+		protected float HitEffectiveness { get; private set; } = 1f;
+
+		protected int ScaleHitEffect(int amount)
+		{
+			return amount <= 0 ? 0 : System.Math.Max(1, (int)(amount * HitEffectiveness));
+		}
+
+		protected bool PassesHitEffectivenessRoll()
+		{
+			return HitEffectiveness >= 1f || (HitEffectiveness > 0f && Main.rand.NextFloat() < HitEffectiveness);
+		}
 		// Unique key used for saving/loading and for dupe-checking.
 		// Keep this short, lowercase, and STABLE - if you rename it later,
 		// anyone who already owns it will lose it on their next load.
@@ -128,6 +149,29 @@ namespace Augments
 		// `hit` contains the finalized damage/crit info for that swing.
 		public virtual void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit) { }
 
+		// Source-aware entry point used by AugmentPlayer. Proc damage is only
+		// dispatched here when its projectile tag explicitly allows on-hit effects.
+		public virtual void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit, AugmentHitSource source)
+		{
+			OnHitNPCWithItem(player, item, target, hit, source, 1f);
+		}
+
+		public virtual void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit, AugmentHitSource source, float effectiveness)
+		{
+			float previousEffectiveness = HitEffectiveness;
+			HitEffectiveness = effectiveness;
+			try
+			{
+				OnHitNPCWithItem(player, item, target, hit);
+			}
+			finally
+			{
+				HitEffectiveness = previousEffectiveness;
+			}
+
+			OnAugmentHitNPC(player, target, hit, source, effectiveness);
+		}
+
 		// Fires whenever the player hits an NPC with a projectile. This also
 		// covers thrust-style melee weapons (short swords, spears) which
 		// register their hit through a projectile instead of a direct swing -
@@ -135,14 +179,91 @@ namespace Augments
 		// and OnHitNPCWithItem, or it'll silently miss those weapons.
 		public virtual void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit) { }
 
+		public virtual void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit, AugmentHitSource source)
+		{
+			OnHitNPCWithProj(player, proj, target, hit, source, 1f);
+		}
+
+		public virtual void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit, AugmentHitSource source, float effectiveness)
+		{
+			float previousEffectiveness = HitEffectiveness;
+			HitEffectiveness = effectiveness;
+			try
+			{
+				OnHitNPCWithProj(player, proj, target, hit);
+			}
+			finally
+			{
+				HitEffectiveness = previousEffectiveness;
+			}
+
+			OnAugmentHitNPC(player, target, hit, source, effectiveness);
+		}
+
+		// Shared opt-in hook for augments that intentionally react to both
+		// ordinary attacks and damage created by another augment.
+		public virtual void OnAugmentHitNPC(Player player, NPC target, NPC.HitInfo hit, AugmentHitSource source, float effectiveness) { }
+
 		// Fires BEFORE a melee weapon hit is finalized - use this (not the
 		// OnHit hooks above) to actually boost outgoing damage, via
 		// modifiers.FlatBonusDamage += amount. Same short-sword/spear caveat
 		// applies: implement both this and the WithProj version below.
 		public virtual void ModifyHitNPCWithItem(Player player, Item item, NPC target, ref NPC.HitModifiers modifiers) { }
 
+		public virtual void ModifyHitNPCWithItem(Player player, Item item, NPC target, ref NPC.HitModifiers modifiers, AugmentHitSource source)
+		{
+			ModifyHitNPCWithItem(player, item, target, ref modifiers, source, 1f);
+		}
+
+		public virtual void ModifyHitNPCWithItem(Player player, Item item, NPC target, ref NPC.HitModifiers modifiers, AugmentHitSource source, float effectiveness)
+		{
+			if (source == AugmentHitSource.NormalAttack)
+			{
+				float previousEffectiveness = HitEffectiveness;
+				HitEffectiveness = effectiveness;
+				try
+				{
+					ModifyHitNPCWithItem(player, item, target, ref modifiers);
+				}
+				finally
+				{
+					HitEffectiveness = previousEffectiveness;
+				}
+			}
+
+			ModifyAugmentHitNPC(player, target, ref modifiers, source, effectiveness);
+		}
+
 		// Projectile equivalent of the above (covers thrust melee weapons).
 		public virtual void ModifyHitNPCWithProj(Player player, Projectile proj, NPC target, ref NPC.HitModifiers modifiers) { }
+
+		public virtual void ModifyHitNPCWithProj(Player player, Projectile proj, NPC target, ref NPC.HitModifiers modifiers, AugmentHitSource source)
+		{
+			ModifyHitNPCWithProj(player, proj, target, ref modifiers, source, 1f);
+		}
+
+		public virtual void ModifyHitNPCWithProj(Player player, Projectile proj, NPC target, ref NPC.HitModifiers modifiers, AugmentHitSource source, float effectiveness)
+		{
+			if (source == AugmentHitSource.NormalAttack)
+			{
+				float previousEffectiveness = HitEffectiveness;
+				HitEffectiveness = effectiveness;
+				try
+				{
+					ModifyHitNPCWithProj(player, proj, target, ref modifiers);
+				}
+				finally
+				{
+					HitEffectiveness = previousEffectiveness;
+				}
+			}
+
+			ModifyAugmentHitNPC(player, target, ref modifiers, source, effectiveness);
+		}
+
+		// Modifier counterpart to OnAugmentHitNPC. Legacy modifier hooks remain
+		// normal-attack-only; future augments can selectively handle proc damage here.
+		public virtual void ModifyAugmentHitNPC(Player player, NPC target, ref NPC.HitModifiers modifiers, AugmentHitSource source, float effectiveness) { }
 
 		// Fires before any damage calculation, for guaranteed/random no-cost
 		// dodges (the same hook Black Belt's own dodge runs through, per
@@ -197,6 +318,9 @@ namespace Augments
 		// once at spawn, not reacted to per-hit.
 		public virtual void OnProjectileSpawn(Player player, Projectile projectile) { }
 
+		// Fires only for a projectile spawned directly by using a weapon.
+		public virtual void OnShootProjectile(Player player, Item item, Projectile projectile) { }
+
 		// Augment instances are recreated fresh every mod load, so any custom
 		// persistent stat (e.g. Lucky Find's lifetime coin counter) needs to be
 		// explicitly written here and restored via LoadCustomData below -
@@ -207,6 +331,9 @@ namespace Augments
 		// Fires while a spell's mana cost is being calculated, before it's
 		// spent - `mult` scales the cost (mult = 0f means free for that cast).
 		public virtual void ModifyManaCost(Player player, Item item, ref float reduce, ref float mult) { }
+
+		// Fires after mana is successfully consumed by an item use.
+		public virtual void OnConsumeMana(Player player, Item item, int manaConsumed) { }
 
 		// Fires when a ranged weapon is about to consume ammo for a shot -
 		// return false to skip consuming that ammo this shot. Default true

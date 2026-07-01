@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.DataStructures;
 using Terraria.GameInput;
@@ -60,6 +61,19 @@ namespace Augments
 		// FortuneBonus stacks additively into one shared Luck stat.
 		public float TotalFortune => Owned.Sum(a => a.FortuneBonus);
 
+		// Live count of Support-class augments owned. Player is "in Support
+		// stance" when this is >= 2, which applies a damage penalty and defense
+		// bonus that both scale with the count (see UpdateEquips below).
+		public int SupportAugmentCount => Owned.Count(a => a.Class == AugmentClass.Support);
+
+		// Shared pixel radius for all pull-based Support auras.
+		private const float AuraRadius = 600f;
+
+		// Set true each UpdateEquips tick when the Ironclad Aura defense bonus
+		// was applied from a nearby Support player. Read by AugmentCooldownDrawer
+		// to show the status icon. Reset to false at the top of each UpdateEquips.
+		public bool ReceivedIroncladAura;
+
 		// Picks up to `count` random augments of the given rarity that the
 		// player doesn't already own, no repeats. With any TotalFortune,
 		// each slot independently gets a 15% chance to specifically try for
@@ -118,6 +132,30 @@ namespace Augments
 		{
 			foreach (var a in Owned)
 				a.OnUpdate(Player);
+
+			// Pull-based Warcry aura: each player checks nearby Support players
+			// for the "warcry" augment and self-applies the buff. This is
+			// multiplayer-safe because every client only modifies their own player.
+			for (int i = 0; i < Main.maxPlayers; i++)
+			{
+				Player other = Main.player[i];
+				if (!other.active || other.dead || other == Player)
+					continue;
+				if (Vector2.Distance(Player.Center, other.Center) > AuraRadius)
+					continue;
+				var otherAP = other.GetModPlayer<AugmentPlayer>();
+				if (otherAP.SupportAugmentCount < 2 || !otherAP.HasAugment("warcry"))
+					continue;
+				// 10-tick duration = refreshed each tick while in range, falls off
+				// within 10 ticks (~0.17s) of the Support player leaving range.
+				Player.AddBuff(ModContent.BuffType<WarCryBuff>(), 10);
+				break;
+			}
+
+			// Owner also benefits from their own Warcry - the pull loop skips
+			// self, so this handles the Support player's own application.
+			if (SupportAugmentCount >= 2 && HasAugment("warcry"))
+				Player.AddBuff(ModContent.BuffType<WarCryBuff>(), 10);
 		}
 
 		public override void PostUpdateRunSpeeds()
@@ -128,8 +166,56 @@ namespace Augments
 
 		public override void UpdateEquips()
 		{
+			ReceivedIroncladAura = false;
+
 			foreach (var a in Owned)
 				a.UpdateEquips(Player);
+
+			int supportCount = SupportAugmentCount;
+			if (supportCount >= 2)
+			{
+				float damagePenalty;
+				int defenseBonus;
+
+				if      (supportCount == 2) { damagePenalty = -0.30f; defenseBonus = 20; }
+				else if (supportCount == 3) { damagePenalty = -0.23f; defenseBonus = 30; }
+				else if (supportCount == 4) { damagePenalty = -0.16f; defenseBonus = 40; }
+				else if (supportCount == 5) { damagePenalty = -0.10f; defenseBonus = 50; }
+				else                        { damagePenalty = -0.05f; defenseBonus = 60; }
+
+				Player.GetDamage(DamageClass.Generic) += damagePenalty;
+				Player.statDefense += defenseBonus;
+			}
+
+			// Pull-based Ironclad Aura: each player checks nearby Support players
+			// for the "ironclad_aura" augment and adds the defense bonus to themselves.
+			// DESIGN FLAG: if two Support players both own this augment and both stand
+			// near a teammate, that teammate receives +16 defense instead of +8.
+			// Current behavior (break on first match) caps it at one source.
+			// Remove the break to allow stacking from multiple Support players.
+			for (int i = 0; i < Main.maxPlayers; i++)
+			{
+				Player other = Main.player[i];
+				if (!other.active || other.dead || other == Player)
+					continue;
+				if (Vector2.Distance(Player.Center, other.Center) > AuraRadius)
+					continue;
+				var otherAP = other.GetModPlayer<AugmentPlayer>();
+				if (otherAP.SupportAugmentCount < 2 || !otherAP.HasAugment("ironclad_aura"))
+					continue;
+				Player.statDefense += 8;
+				ReceivedIroncladAura = true;
+				break;
+			}
+
+			// Owner also benefits from their own Ironclad Aura. The
+			// !ReceivedIroncladAura guard prevents double-application if a
+			// second Support player nearby already triggered the pull loop above.
+			if (!ReceivedIroncladAura && SupportAugmentCount >= 2 && HasAugment("ironclad_aura"))
+			{
+				Player.statDefense += 8;
+				ReceivedIroncladAura = true;
+			}
 		}
 
 		public override void ProcessTriggers(TriggersSet triggersSet)
@@ -168,7 +254,7 @@ namespace Augments
 		public override void OnHitNPCWithItem(Item item, NPC target, NPC.HitInfo hit, int damageDone)
 		{
 			foreach (var a in Owned)
-				a.OnHitNPCWithItem(Player, item, target, hit);
+				a.OnHitNPCWithItem(Player, item, target, hit, AugmentHitSource.NormalAttack);
 
 			// Twin Strike (DuplicatesOnHitEffects) - a crit re-fires every
 			// owned augment's on-hit reaction a second time. Deliberately
@@ -177,7 +263,7 @@ namespace Augments
 			if (hit.Crit && Owned.Any(a => a.DuplicatesOnHitEffects))
 			{
 				foreach (var a in Owned)
-					a.OnHitNPCWithItem(Player, item, target, hit);
+					a.OnHitNPCWithItem(Player, item, target, hit, AugmentHitSource.NormalAttack);
 			}
 		}
 
@@ -186,14 +272,21 @@ namespace Augments
 		// of through OnHitNPCWithItem.
 		public override void OnHitNPCWithProj(Projectile proj, NPC target, NPC.HitInfo hit, int damageDone)
 		{
+			AugmentProjectileTag tag = proj.GetGlobalProjectile<AugmentProjectileTag>();
+			if (tag.IsAugmentProcDamage && !tag.CanTriggerOnHitAugments)
+				return;
+
+			AugmentHitSource source = tag.IsAugmentProcDamage ? AugmentHitSource.AugmentProc : AugmentHitSource.NormalAttack;
+			float effectiveness = tag.IsAugmentProcDamage ? MathHelper.Clamp(tag.OnHitEffectiveness, 0f, 1f) : 1f;
+
 			foreach (var a in Owned)
-				a.OnHitNPCWithProj(Player, proj, target, hit);
+				a.OnHitNPCWithProj(Player, proj, target, hit, source, effectiveness);
 
 			// Mirrors the OnHitNPCWithItem second pass above.
-			if (hit.Crit && Owned.Any(a => a.DuplicatesOnHitEffects))
+			if (source == AugmentHitSource.NormalAttack && hit.Crit && Owned.Any(a => a.DuplicatesOnHitEffects))
 			{
 				foreach (var a in Owned)
-					a.OnHitNPCWithProj(Player, proj, target, hit);
+					a.OnHitNPCWithProj(Player, proj, target, hit, source, effectiveness);
 			}
 		}
 
@@ -202,13 +295,20 @@ namespace Augments
 		public override void ModifyHitNPCWithItem(Item item, NPC target, ref NPC.HitModifiers modifiers)
 		{
 			foreach (var a in Owned)
-				a.ModifyHitNPCWithItem(Player, item, target, ref modifiers);
+				a.ModifyHitNPCWithItem(Player, item, target, ref modifiers, AugmentHitSource.NormalAttack);
 		}
 
 		public override void ModifyHitNPCWithProj(Projectile proj, NPC target, ref NPC.HitModifiers modifiers)
 		{
+			AugmentProjectileTag tag = proj.GetGlobalProjectile<AugmentProjectileTag>();
+			if (tag.IsAugmentProcDamage && !tag.CanTriggerOnHitAugments)
+				return;
+
+			AugmentHitSource source = tag.IsAugmentProcDamage ? AugmentHitSource.AugmentProc : AugmentHitSource.NormalAttack;
+			float effectiveness = tag.IsAugmentProcDamage ? MathHelper.Clamp(tag.OnHitEffectiveness, 0f, 1f) : 1f;
+
 			foreach (var a in Owned)
-				a.ModifyHitNPCWithProj(Player, proj, target, ref modifiers);
+				a.ModifyHitNPCWithProj(Player, proj, target, ref modifiers, source, effectiveness);
 		}
 
 		public override bool FreeDodge(Player.HurtInfo info)
@@ -243,6 +343,12 @@ namespace Augments
 		{
 			foreach (var a in Owned)
 				a.ModifyManaCost(Player, item, ref reduce, ref mult);
+		}
+
+		public override void OnConsumeMana(Item item, int manaConsumed)
+		{
+			foreach (var a in Owned)
+				a.OnConsumeMana(Player, item, manaConsumed);
 		}
 
 		public override bool CanConsumeAmmo(Item weapon, Item ammo)

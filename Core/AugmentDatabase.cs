@@ -102,6 +102,16 @@ namespace Augments
             Register(new MomentumCrashAugment());
             Register(new TrophyHunterAugment());
             Register(new GodslayerBladeAugment());
+            Register(new ArcaneSingularityAugment());
+            Register(new QueensSwarmAugment());
+            Register(new EchoChamberAugment());
+            Register(new RicochetEngineAugment());
+            Register(new HuntersPaceAugment());
+            Register(new NecromancersCourtAugment());
+            Register(new EldritchCovenantAugment());
+            Register(new WarGodsTempoAugment());
+            Register(new WarCryAugment());
+            Register(new IroncladAuraAugment());
         }
 
         private static void Register(Augment augment)

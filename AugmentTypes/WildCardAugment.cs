@@ -56,17 +56,18 @@ namespace Augments
             switch (Main.rand.Next(4))
             {
                 case 0:
-                    player.statLife = System.Math.Min(player.statLife + HealAmount, player.statLifeMax2);
-                    player.HealEffect(HealAmount);
+                    int healing = ScaleHitEffect(HealAmount);
+                    player.statLife = System.Math.Min(player.statLife + healing, player.statLifeMax2);
+                    player.HealEffect(healing);
                     break;
                 case 1:
-                    speedTicksRemaining = SpeedDurationTicks;
+                    speedTicksRemaining = ScaleHitEffect(SpeedDurationTicks);
                     break;
                 case 2:
-                    invulnTicksRemaining = InvulnerabilityTicks;
+                    invulnTicksRemaining = ScaleHitEffect(InvulnerabilityTicks);
                     break;
                 case 3:
-                    target.SimpleStrikeNPC((int)(hit.Damage * BonusStrikeDamagePercent), player.direction);
+                    target.SimpleStrikeNPC(ScaleHitEffect((int)(hit.Damage * BonusStrikeDamagePercent)), player.direction);
                     break;
             }
         }
