@@ -1,4 +1,4 @@
-using Microsoft.Xna.Framework.Graphics;
+﻿using Microsoft.Xna.Framework.Graphics;
 using Terraria;
 using Terraria.GameContent;
 using Terraria.ID;
@@ -67,13 +67,13 @@ namespace Augments
         // both are Summon-class damage the player should feel benefit from.
         public override void ModifyHitNPCWithItem(Player player, Item item, NPC target, ref NPC.HitModifiers modifiers)
         {
-            if (item.DamageType == DamageClass.Summon)
+            if (item.CountsAsClass(DamageClass.Summon))
                 modifiers.FlatBonusDamage += (int)(item.damage * hitStacks * BonusPerStackPercent);
         }
 
         public override void ModifyHitNPCWithProj(Player player, Projectile proj, NPC target, ref NPC.HitModifiers modifiers)
         {
-            if (proj.DamageType == DamageClass.Summon)
+            if (proj.CountsAsClass(DamageClass.Summon))
                 modifiers.FlatBonusDamage += (int)(proj.damage * hitStacks * BonusPerStackPercent);
         }
     }

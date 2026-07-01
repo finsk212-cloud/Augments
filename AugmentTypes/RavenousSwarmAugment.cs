@@ -1,4 +1,4 @@
-using Terraria;
+﻿using Terraria;
 using Terraria.ModLoader;
 
 namespace Augments
@@ -31,13 +31,13 @@ namespace Augments
         // earlier. Same shared tagging system SwarmTacticsAugment uses.
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
-            if (item.DamageType == DamageClass.Summon)
+            if (item.CountsAsClass(DamageClass.Summon))
                 target.GetGlobalNPC<AugmentSwarmTacticsNPC>().TagSummonHit(player.whoAmI);
         }
 
         public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
         {
-            if (proj.DamageType == DamageClass.Summon)
+            if (proj.CountsAsClass(DamageClass.Summon))
                 target.GetGlobalNPC<AugmentSwarmTacticsNPC>().TagSummonHit(player.whoAmI);
         }
 
