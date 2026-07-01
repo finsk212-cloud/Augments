@@ -17,6 +17,7 @@ namespace Augments
         public const string FrostburnHex = "66FFE0";      // the Frostburn debuff name specifically
         public const string MovementSpeedHex = "CCFF66"; // movement speed percentage text
         public const string SupportClassHex = "8CE6A0"; // Support class references in descriptions
+        public const string ActiveHex = "FFE566";       // "Active:" label on keybind-triggered augments
 
         public static readonly Color Trigger = new Color(255, 166, 77);
         public static readonly Color Healing = new Color(102, 255, 102);
@@ -31,5 +32,6 @@ namespace Augments
         public static readonly Color Frostburn = new Color(102, 255, 224);
         public static readonly Color MovementSpeed = new Color(204, 255, 102);
         public static readonly Color SupportClass = new Color(140, 230, 160);
+        public static readonly Color Active = new Color(255, 229, 102);
     }
 }

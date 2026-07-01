@@ -1,6 +1,10 @@
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+using Terraria;
+using Terraria.GameContent;
 using Terraria.GameContent.UI.Elements;
 using Terraria.UI;
+using Terraria.UI.Chat;
 
 namespace Augments
 {
@@ -30,6 +34,30 @@ namespace Augments
 			};
 			nameText.Left.Set(10f, 0f);
 			Append(nameText);
+		}
+
+		protected override void DrawSelf(SpriteBatch spriteBatch)
+		{
+			base.DrawSelf(spriteBatch);
+
+			var kb = augment.ActiveModKeybind;
+			if (kb == null || kb.GetAssignedKeys().Count > 0) return;
+
+			var font = FontAssets.MouseText.Value;
+			const string hint = "No key bound";
+			Vector2 hintScale = new Vector2(0.72f);
+			Vector2 hintSize = ChatManager.GetStringSize(font, hint, hintScale);
+
+			CalculatedStyle dims = GetInnerDimensions();
+			Vector2 hintPos = new Vector2(
+				dims.X + dims.Width - hintSize.X,
+				dims.Y + (dims.Height - hintSize.Y) * 0.5f
+			);
+
+			ChatManager.DrawColorCodedStringWithShadow(
+				spriteBatch, font, hint, hintPos,
+				new Color(255, 100, 80) * 0.9f, 0f, Vector2.Zero, hintScale
+			);
 		}
 
 		public override void MouseOver(UIMouseEvent evt)

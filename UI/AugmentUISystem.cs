@@ -144,9 +144,9 @@ namespace Augments
 
 		// --- Choice popup controls ---
 
-		public void ShowChoices(List<Augment> choices, AugmentRarity rarity)
+		public void ShowChoices(List<Augment> choices, AugmentRarity rarity, bool networkReward = false)
 		{
-			choiceState.SetChoices(choices, rarity);
+			choiceState.SetChoices(choices, rarity, networkReward);
 			augmentInterface?.SetState(choiceState);
 		}
 
@@ -156,6 +156,14 @@ namespace Augments
 		}
 
 		public bool IsOpen => augmentInterface?.CurrentState != null;
+
+		public void RefreshOpenPlayerPanels()
+		{
+			if (IsListOpen)
+				listState.Refresh();
+			if (IsShopOpen)
+				shopState.Refresh();
+		}
 
 		// --- "Your Augments" list controls ---
 

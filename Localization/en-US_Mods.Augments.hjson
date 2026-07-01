@@ -3,6 +3,7 @@ Keybinds: {
 	DebugTriggerPopup.DisplayName: Debug Trigger Popup
 	DebugSpawnVendor.DisplayName: Debug Spawn Vendor
 	DebugToggleShop.DisplayName: Debug Toggle Shop
+	Cleanse.DisplayName: Cleanse
 }
 
 NPCs: {

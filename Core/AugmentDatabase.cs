@@ -120,6 +120,14 @@ namespace Augments
             Register(new LastRitesAugment());
             Register(new LifelineAugment());
             Register(new UndyingBondAugment());
+            Register(new RevitalizingWaveAugment());
+            Register(new TauntAugment());
+            Register(new CleanseAugment());
+            Register(new SwiftReturnAugment());
+            Register(new PiercingShotAugment());
+            Register(new RapidFireAugment());
+            Register(new GlassSightAugment());
+            Register(new SharpenedFocusAugment());
         }
 
         private static void Register(Augment augment)

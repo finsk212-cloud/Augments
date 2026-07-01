@@ -1,3 +1,3 @@
-displayName = Augments
+displayName = Augments mod rogue
 author = Finsk
-version = 0.1
+version = 0.3

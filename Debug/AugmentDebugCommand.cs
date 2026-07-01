@@ -1,4 +1,6 @@
 using Microsoft.Xna.Framework;
+using Terraria;
+using Terraria.ID;
 using Terraria.ModLoader;
 
 namespace Augments
@@ -7,8 +9,8 @@ namespace Augments
     {
         public override string Command => "augment";
         public override CommandType Type => CommandType.Chat;
-        public override string Usage => "/augment add <id or number> | /augment remove <id or number> | /augment addall | /augment clear | /augment list";
-        public override string Description => "Debug: add, remove, clear, or list augments.";
+        public override string Usage => "/augment add|remove|sell|buyback <id or number> | /augment addall | /augment clear | /augment list";
+        public override string Description => "Debug: add, remove, sell, buy back, clear, or list augments.";
 
         public override void Action(CommandCaller caller, string input, string[] args)
         {
@@ -39,7 +41,10 @@ namespace Augments
                 for (int i = startIndex; i < endIndex; i++)
                 {
                     var augment = AugmentDatabase.All[i];
-                    caller.Reply($"{i + 1}. {augment.Id} - {augment.DisplayName} ({augment.Rarity})", Color.White);
+                    string status = augmentPlayer.HasAugment(augment.Id)
+                        ? "owned"
+                        : augmentPlayer.SoldAugmentIds.Contains(augment.Id) ? "sold" : augmentPlayer.EverOwnedIds.Contains(augment.Id) ? "ever owned" : "new";
+                    caller.Reply($"{i + 1}. {augment.Id} - {augment.DisplayName} ({augment.Rarity}, {status})", Color.White);
                 }
 
                 return;
@@ -47,35 +52,13 @@ namespace Augments
 
             if (sub == "addall")
             {
-                int addedCount = 0;
-
-                foreach (var augment in AugmentDatabase.All)
-                {
-                    if (!augmentPlayer.HasAugment(augment.Id))
-                    {
-                        augmentPlayer.GrantAugment(augment);
-                        addedCount++;
-                    }
-                }
-
-                caller.Reply($"Added all augments. Total added: {addedCount}.", Color.LightGreen);
+				RunMutation(caller, DebugAugmentCommandType.AddAll);
                 return;
             }
 
             if (sub == "clear" || sub == "removeall" || sub == "reset")
             {
-                int removedCount = 0;
-
-                foreach (var augment in AugmentDatabase.All)
-                {
-                    if (augmentPlayer.HasAugment(augment.Id))
-                    {
-                        augmentPlayer.RemoveAugment(augment);
-                        removedCount++;
-                    }
-                }
-
-                caller.Reply($"Removed all augments. Total removed: {removedCount}.", Color.Orange);
+				RunMutation(caller, DebugAugmentCommandType.Clear);
                 return;
             }
 
@@ -96,19 +79,43 @@ namespace Augments
             switch (sub)
             {
                 case "add":
-                    augmentPlayer.GrantAugment(selectedAugment);
+					RunMutation(caller, DebugAugmentCommandType.Add, selectedAugment.Id);
                     break;
 
                 case "remove":
-                    augmentPlayer.RemoveAugment(selectedAugment);
-                    caller.Reply($"Removed {selectedAugment.DisplayName}.", Color.Orange);
+					RunMutation(caller, DebugAugmentCommandType.Remove, selectedAugment.Id);
                     break;
+
+				case "sell":
+					RunMutation(caller, DebugAugmentCommandType.Sell, selectedAugment.Id);
+					break;
+
+				case "buyback":
+					RunMutation(caller, DebugAugmentCommandType.BuyBack, selectedAugment.Id);
+					break;
 
                 default:
                     caller.Reply(Usage, Color.Yellow);
                     break;
             }
         }
+
+		private static void RunMutation(CommandCaller caller, DebugAugmentCommandType command, string augmentId = "")
+		{
+			if (Main.netMode == NetmodeID.MultiplayerClient)
+			{
+				if (!AugmentNet.EnableDebugCommandsInMultiplayer)
+				{
+					caller.Reply("Multiplayer debug commands are disabled.", Color.Orange);
+					return;
+				}
+
+				AugmentNet.SendDebugCommandRequest(command, augmentId);
+				return;
+			}
+
+			AugmentNet.ApplyDebugCommand(caller.Player, command, augmentId);
+		}
 
         private Augment GetAugmentFromArg(string arg)
         {

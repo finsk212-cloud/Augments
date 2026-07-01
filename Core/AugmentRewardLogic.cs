@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Terraria;
+using Terraria.ID;
 using Terraria.ModLoader;
 
 namespace Augments
@@ -22,7 +23,7 @@ namespace Augments
 
 			if (TryRollKeystoneFamily(augmentPlayer, rolledRarity, out List<Augment> keystoneChoices))
 			{
-				ModContent.GetInstance<AugmentUISystem>().ShowChoices(keystoneChoices, rolledRarity);
+				ShowRewardChoices(player, keystoneChoices, rolledRarity);
 				return;
 			}
 
@@ -35,9 +36,17 @@ namespace Augments
 			}
 
 			if (choices.Count > 0)
-				ModContent.GetInstance<AugmentUISystem>().ShowChoices(choices, actualRarity);
+				ShowRewardChoices(player, choices, actualRarity);
 			else
 				Main.NewText("No augments left to offer!", 255, 100, 100);
+		}
+
+		private static void ShowRewardChoices(Player player, List<Augment> choices, AugmentRarity rarity)
+		{
+			if (Main.netMode == NetmodeID.Server)
+				AugmentNet.SendRewardChoices(player.whoAmI, choices, rarity);
+			else
+				ModContent.GetInstance<AugmentUISystem>().ShowChoices(choices, rarity);
 		}
 
 		// Only Epic/Legendary rolls get a shot at this - on success, an

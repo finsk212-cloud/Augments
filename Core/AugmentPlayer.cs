@@ -1,9 +1,11 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.DataStructures;
 using Terraria.GameInput;
+using Terraria.ID;
 using Terraria.ModLoader;
 using Terraria.ModLoader.IO;
 
@@ -11,50 +13,220 @@ namespace Augments
 {
 	public class AugmentPlayer : ModPlayer
 	{
-		public List<Augment> Owned = new List<Augment>();
+		public const int MaxOwnedAugments = 5;
 
-		// Every augment Id this player has ever owned, even after later being
-		// removed via RemoveAugment - this list only ever grows. Drives the
-		// vendor shop's "Buy Back" section (ever-owned but not currently owned).
-		public List<string> EverOwnedIds = new List<string>();
+		private readonly HashSet<string> ownedIds = new HashSet<string>();
+		private readonly HashSet<string> everOwnedIds = new HashSet<string>();
+		private readonly HashSet<string> soldAugmentIds = new HashSet<string>();
+		private readonly HashSet<string> lockedKeystoneFamilies = new HashSet<string>();
+		private readonly List<Augment> owned = new List<Augment>();
 
-		// Keystone families with one member already chosen - this list only
-		// ever grows too, same as EverOwnedIds, and is what permanently
-		// excludes every sibling in that family from RollChoices once set.
-		public List<string> LockedKeystoneFamilies = new List<string>();
+		public IReadOnlySet<string> OwnedIds => ownedIds;
+		public IReadOnlySet<string> EverOwnedIds => everOwnedIds;
+		public IReadOnlySet<string> SoldAugmentIds => soldAugmentIds;
+		public IReadOnlySet<string> LockedKeystoneFamilies => lockedKeystoneFamilies;
+		public IReadOnlyList<Augment> Owned => owned;
+
+		// How many times each boss type has granted (or attempted to grant)
+		// augment selection to this player. Persisted across sessions.
+		// Key = NPC.type, value = attempt count (increments even on failed rolls).
+		public Dictionary<int, int> BossAugmentKills = new Dictionary<int, int>();
+
+		// Boss types the player has dealt damage to during the current play session.
+		// Session-only — resets on world enter. Used for multiplayer participation
+		// checks (skipped in singleplayer; see TODO in BossAugmentDrop).
+		public HashSet<int> DamagedBossesThisFight = new HashSet<int>();
+
+		// Keystone families with one member already chosen permanently exclude
+		// every sibling in that family from RollChoices once set.
 
 		public bool HasAugment(string id)
 		{
-			foreach (var a in Owned)
-			{
-				if (a.Id == id)
-					return true;
-			}
-			return false;
+			return id != null && ownedIds.Contains(id);
 		}
 
-		public void GrantAugment(Augment augment)
+		public bool GrantAugmentByIdServerAuthoritative(string id, bool sync = true)
 		{
-			if (augment == null || HasAugment(augment.Id))
-				return;
+			if (Main.netMode == NetmodeID.MultiplayerClient)
+				return false;
 
-			Owned.Add(augment);
-			if (!EverOwnedIds.Contains(augment.Id))
-				EverOwnedIds.Add(augment.Id);
+			Augment augment = AugmentDatabase.GetById(id);
+			if (augment == null || ownedIds.Contains(id) || soldAugmentIds.Contains(id) || ownedIds.Count >= MaxOwnedAugments)
+				return false;
 
-			if (augment.KeystoneFamily != null && !LockedKeystoneFamilies.Contains(augment.KeystoneFamily))
-				LockedKeystoneFamilies.Add(augment.KeystoneFamily);
+			ownedIds.Add(id);
+			everOwnedIds.Add(id);
+			if (augment.KeystoneFamily != null)
+				lockedKeystoneFamilies.Add(augment.KeystoneFamily);
 
+			RebuildOwnedCacheFromOwnedIdsOnly();
 			augment.OnAcquire(Player);
-			Main.NewText($"Augment acquired: {augment.DisplayName}", 255, 215, 0);
+			if (Main.netMode != NetmodeID.Server)
+				Main.NewText($"Augment acquired: {augment.DisplayName}", 255, 215, 0);
+
+			DebugCheckState("GrantAugmentByIdServerAuthoritative");
+			if (sync && Main.netMode == NetmodeID.Server)
+				AugmentNet.SendSyncPlayer(Player);
+			return true;
 		}
 
-		public void RemoveAugment(Augment augment)
+		public bool RemoveAugmentByIdServerAuthoritative(string id, bool sync = true)
+		{
+			if (Main.netMode == NetmodeID.MultiplayerClient || !ownedIds.Remove(id))
+				return false;
+
+			RebuildOwnedCacheFromOwnedIdsOnly();
+			DebugCheckState("RemoveAugmentByIdServerAuthoritative");
+			if (sync && Main.netMode == NetmodeID.Server)
+				AugmentNet.SendSyncPlayer(Player);
+			return true;
+		}
+
+		public bool SellAugmentByIdServerAuthoritative(string id, bool sync = true)
+		{
+			if (Main.netMode == NetmodeID.MultiplayerClient || !ownedIds.Remove(id))
+				return false;
+
+			Augment augment = AugmentDatabase.GetById(id);
+			if (augment == null)
+			{
+				ownedIds.Add(id);
+				return false;
+			}
+
+			soldAugmentIds.Add(id);
+			everOwnedIds.Add(id);
+			RebuildOwnedCacheFromOwnedIdsOnly();
+
+			int refund = GetRemoveRefund(augment.Rarity);
+			if (refund > 0)
+				SpawnEssenceRefund(refund);
+
+			DebugCheckState("SellAugmentByIdServerAuthoritative");
+			if (sync && Main.netMode == NetmodeID.Server)
+				AugmentNet.SendSyncPlayer(Player);
+			return true;
+		}
+
+		public bool BuyBackSoldAugmentByIdServerAuthoritative(string id, bool sync = true)
+		{
+			if (Main.netMode == NetmodeID.MultiplayerClient || !soldAugmentIds.Contains(id) || ownedIds.Count >= MaxOwnedAugments)
+				return false;
+
+			Augment augment = AugmentDatabase.GetById(id);
+			if (augment == null)
+				return false;
+
+			int cost = GetBuyBackCost(augment.Rarity);
+			int essenceType = ModContent.ItemType<AugmentEssenceItem>();
+			if (Player.CountItem(essenceType, cost) < cost)
+				return false;
+
+			for (int i = 0; i < cost; i++)
+				Player.ConsumeItem(essenceType);
+
+			soldAugmentIds.Remove(id);
+			ownedIds.Add(id);
+			everOwnedIds.Add(id);
+			RebuildOwnedCacheFromOwnedIdsOnly();
+			augment.OnAcquire(Player);
+
+			if (Main.netMode == NetmodeID.Server)
+				SyncInventory();
+
+			DebugCheckState("BuyBackSoldAugmentByIdServerAuthoritative");
+			if (sync && Main.netMode == NetmodeID.Server)
+				AugmentNet.SendSyncPlayer(Player);
+			return true;
+		}
+
+		public void ChooseReward(Augment augment)
 		{
 			if (augment == null)
 				return;
 
-			Owned.RemoveAll(a => a.Id == augment.Id);
+			if (Main.netMode == NetmodeID.MultiplayerClient)
+			{
+				AugmentNet.SendChooseReward(augment.Id);
+				return;
+			}
+
+			ApplyRewardAugment(augment);
+		}
+
+		public bool ApplyRewardAugment(Augment augment, bool sync = true)
+		{
+			if (Main.netMode == NetmodeID.MultiplayerClient || augment == null || HasAugment(augment.Id) || soldAugmentIds.Contains(augment.Id))
+				return false;
+
+			if (ownedIds.Count >= MaxOwnedAugments)
+			{
+				everOwnedIds.Add(augment.Id);
+				soldAugmentIds.Add(augment.Id);
+
+				int refund = GetRewardRefund(augment.Rarity);
+				if (refund > 0)
+					SpawnEssenceRefund(refund);
+
+				if (Main.netMode != NetmodeID.Server)
+				{
+					string msg = refund > 0
+						? $"{augment.DisplayName} sold to Mommy 2B - received {refund} Augment Essence."
+						: $"{augment.DisplayName} sold to Mommy 2B. Available to buy back later.";
+					Main.NewText(msg, 180, 220, 255);
+				}
+
+				DebugCheckState("ApplyRewardAugmentSoldAtCap");
+				if (sync && Main.netMode == NetmodeID.Server)
+					AugmentNet.SendSyncPlayer(Player);
+
+				return true;
+			}
+
+			return GrantAugmentByIdServerAuthoritative(augment.Id, sync);
+		}
+
+		private static int GetRewardRefund(AugmentRarity rarity)
+		{
+			switch (rarity)
+			{
+				case AugmentRarity.Epic:
+					return 1;
+				case AugmentRarity.Legendary:
+					return 2;
+				default:
+					return 0;
+			}
+		}
+
+		private void SpawnEssenceRefund(int amount)
+		{
+			if (amount <= 0 || Main.netMode == NetmodeID.MultiplayerClient)
+				return;
+
+			int itemIndex = Item.NewItem(Player.GetSource_FromThis(), Player.Hitbox, ModContent.ItemType<AugmentEssenceItem>(), amount);
+			if (Main.netMode == NetmodeID.Server)
+				NetMessage.SendData(MessageID.SyncItem, -1, -1, null, itemIndex);
+		}
+
+		public static int GetRemoveRefund(AugmentRarity rarity)
+		{
+			return rarity switch
+			{
+				AugmentRarity.Epic => 1,
+				AugmentRarity.Legendary => 2,
+				_ => 0
+			};
+		}
+
+		public static int GetBuyBackCost(AugmentRarity rarity)
+		{
+			return rarity switch
+			{
+				AugmentRarity.Epic => 2,
+				AugmentRarity.Legendary => 4,
+				_ => 1
+			};
 		}
 
 		// Live-summed, not separately saved - every owned augment's
@@ -101,6 +273,8 @@ namespace Augments
 			foreach (var augment in AugmentDatabase.All)
 			{
 				if (augment.Rarity != rarity || augment.IsDebugOnly || HasAugment(augment.Id))
+					continue;
+				if (soldAugmentIds.Contains(augment.Id))
 					continue;
 
 				// Keystones never appear through this normal per-slot roll at
@@ -273,7 +447,6 @@ namespace Augments
 				if      (supportCount == 2) { damagePenalty = -0.30f; defenseBonus = 20; }
 				else if (supportCount == 3) { damagePenalty = -0.23f; defenseBonus = 30; }
 				else if (supportCount == 4) { damagePenalty = -0.16f; defenseBonus = 40; }
-				else if (supportCount == 5) { damagePenalty = -0.10f; defenseBonus = 50; }
 				else                        { damagePenalty = -0.05f; defenseBonus = 60; }
 
 				Player.GetDamage(DamageClass.Generic) += damagePenalty;
@@ -373,7 +546,12 @@ namespace Augments
 			// is hardcoded since it's the bracket that can roll all 4
 			// rarities via fallback, which is most useful for testing.
 			if (Augments.DebugTriggerPopupKeybind.JustPressed)
-				AugmentRewardLogic.GrantReward(Player, RarityBracket.Endgame);
+			{
+				if (Main.netMode == NetmodeID.SinglePlayer)
+					AugmentRewardLogic.GrantReward(Player, RarityBracket.Endgame);
+				else if (Main.netMode == NetmodeID.MultiplayerClient)
+					AugmentNet.SendDebugRewardRequest();
+			}
 
 			// Debug: force-spawn the vendor NPC at the player, bypassing
 			// CanTownNPCSpawn entirely (that check only gates the automatic
@@ -381,8 +559,8 @@ namespace Augments
 			// test the NPC without needing a house or Skeletron downed.
 			if (Augments.DebugSpawnVendorKeybind.JustPressed)
 			{
-				NPC.NewNPC(Player.GetSource_FromThis(), (int)Player.position.X, (int)Player.position.Y, ModContent.NPCType<AugmentVendorNPC>());
-				Main.NewText("Debug: spawn attempted for AugmentVendorNPC");
+				AugmentNet.RequestVendorSpawn(Player);
+				Main.NewText("Debug: vendor spawn requested");
 			}
 
 			// Debug: open the vendor shop panel directly, ahead of it being
@@ -394,8 +572,35 @@ namespace Augments
 
 		// Fires on every melee/weapon hit - dispatches to whichever owned
 		// augments care about it (most won't override this and do nothing).
+		// Normalized boss key — Twins are two NPCs but one fight, so both segments
+		// map to Retinazer's type for participation and kill-count tracking.
+		private static int BossKey(int npcType)
+			=> npcType == NPCID.Spazmatism ? NPCID.Retinazer : npcType;
+
+		// Records that the local player dealt damage to a boss this fight.
+		// Sends a packet on the first hit so the server can populate its copy.
+		private void TryRegisterBossDamage(NPC target)
+		{
+			if (!target.boss) return;
+
+			int key = BossKey(target.type);
+			if (DamagedBossesThisFight.Contains(key)) return; // already registered
+
+			DamagedBossesThisFight.Add(key);
+
+			if (Main.netMode != NetmodeID.MultiplayerClient) return;
+
+			ModPacket packet = ModContent.GetInstance<Augments>().GetPacket();
+			packet.Write((byte)AugmentPacketType.BossDamageParticipation);
+			packet.Write((byte)Player.whoAmI);
+			packet.Write(key);
+			packet.Send();
+		}
+
 		public override void OnHitNPCWithItem(Item item, NPC target, NPC.HitInfo hit, int damageDone)
 		{
+			TryRegisterBossDamage(target);
+
 			foreach (var a in Owned)
 				a.OnHitNPCWithItem(Player, item, target, hit, AugmentHitSource.NormalAttack);
 
@@ -415,6 +620,8 @@ namespace Augments
 		// of through OnHitNPCWithItem.
 		public override void OnHitNPCWithProj(Projectile proj, NPC target, NPC.HitInfo hit, int damageDone)
 		{
+			TryRegisterBossDamage(target);
+
 			AugmentProjectileTag tag = proj.GetGlobalProjectile<AugmentProjectileTag>();
 			if (tag.IsAugmentProcDamage && !tag.CanTriggerOnHitAugments)
 				return;
@@ -550,6 +757,12 @@ namespace Augments
 			}
 		}
 
+		public override void Kill(double damage, int hitDirection, bool pvp, PlayerDeathReason damageSource)
+		{
+			foreach (var a in Owned)
+				a.OnKill(Player);
+		}
+
 		public override void OnHurt(Player.HurtInfo info)
 		{
 			foreach (var a in Owned)
@@ -605,77 +818,216 @@ namespace Augments
 		public override void GetFishingLevel(Item fishingRod, Item bait, ref float fishingLevel)
 		{
 			foreach (var a in Owned)
-				a.GetFishingLevel(Player, fishingRod, bait, ref fishingLevel);
+					a.GetFishingLevel(Player, fishingRod, bait, ref fishingLevel);
+		}
+
+		private void RebuildOwnedCacheFromOwnedIdsOnly()
+		{
+			owned.Clear();
+			foreach (string id in ownedIds)
+			{
+				Augment augment = AugmentDatabase.GetById(id);
+				if (augment != null)
+					owned.Add(augment);
+			}
+
+			DebugCheckState("RebuildOwnedCacheFromOwnedIdsOnly");
+		}
+
+		public void DebugCheckState(string where)
+		{
+			foreach (string id in soldAugmentIds)
+			{
+				if (!ownedIds.Contains(id))
+					continue;
+
+				string bug = $"BUG STATE at {where}: {id} is BOTH owned and sold";
+				ModContent.GetInstance<Augments>().Logger.Error(bug);
+				if (Main.netMode != NetmodeID.Server && !Main.dedServ)
+					Main.NewText(bug, 255, 80, 80);
+			}
+
+			string state = $"{where} ({Player.name}): Owned=[{string.Join(",", ownedIds)}] Sold=[{string.Join(",", soldAugmentIds)}] Ever=[{string.Join(",", everOwnedIds)}]";
+			ModContent.GetInstance<Augments>().Logger.Info(state);
+			if (Main.netMode != NetmodeID.Server && !Main.dedServ)
+				Main.NewText(state, 180, 180, 180);
+		}
+
+		private void SyncInventory()
+		{
+			if (Main.netMode != NetmodeID.Server)
+				return;
+
+			for (int slot = 0; slot < Player.inventory.Length; slot++)
+				NetMessage.SendData(MessageID.SyncEquipment, -1, -1, null, Player.whoAmI, slot, Player.inventory[slot].prefix);
+		}
+
+		public override void Initialize()
+		{
+			ownedIds.Clear();
+			everOwnedIds.Clear();
+			soldAugmentIds.Clear();
+			lockedKeystoneFamilies.Clear();
+			owned.Clear();
+			BossAugmentKills = new Dictionary<int, int>();
+			DamagedBossesThisFight = new HashSet<int>();
+		}
+
+		public override void OnEnterWorld()
+		{
+			DamagedBossesThisFight.Clear();
+			AugmentNet.SendRequestAugmentSync();
+		}
+
+		public override void SyncPlayer(int toWho, int fromWho, bool newPlayer)
+		{
+			if (Main.netMode == NetmodeID.Server)
+				AugmentNet.SendSyncPlayer(Player, toWho);
+		}
+
+		public void WriteAugmentState(BinaryWriter writer)
+		{
+			DebugCheckState("WriteAugmentState");
+			writer.Write((ushort)ownedIds.Count);
+			foreach (string id in ownedIds)
+				writer.Write(id);
+
+			writer.Write((ushort)everOwnedIds.Count);
+			foreach (string id in everOwnedIds)
+				writer.Write(id);
+
+			writer.Write((ushort)soldAugmentIds.Count);
+			foreach (string id in soldAugmentIds)
+				writer.Write(id);
+
+			writer.Write((ushort)lockedKeystoneFamilies.Count);
+			foreach (string family in lockedKeystoneFamilies)
+				writer.Write(family);
+		}
+
+		public void ReadAugmentState(BinaryReader reader)
+		{
+			ownedIds.Clear();
+			ushort ownedCount = reader.ReadUInt16();
+			for (int i = 0; i < ownedCount; i++)
+				ownedIds.Add(reader.ReadString());
+
+			everOwnedIds.Clear();
+			ushort everOwnedCount = reader.ReadUInt16();
+			for (int i = 0; i < everOwnedCount; i++)
+				everOwnedIds.Add(reader.ReadString());
+
+			soldAugmentIds.Clear();
+			ushort soldCount = reader.ReadUInt16();
+			for (int i = 0; i < soldCount; i++)
+				soldAugmentIds.Add(reader.ReadString());
+
+			lockedKeystoneFamilies.Clear();
+			ushort lockedFamilyCount = reader.ReadUInt16();
+			for (int i = 0; i < lockedFamilyCount; i++)
+				lockedKeystoneFamilies.Add(reader.ReadString());
+
+			RebuildOwnedCacheFromOwnedIdsOnly();
+			DebugCheckState("ReadAugmentState");
 		}
 
 		// --- Persistence: augments survive between play sessions ---
 
 		public override void SaveData(TagCompound tag)
 		{
-			var ids = new List<string>();
+			DebugCheckState("SaveData");
 			var customData = new TagCompound();
-			foreach (var a in Owned)
+			foreach (var a in owned)
 			{
-				ids.Add(a.Id);
-
 				var augmentTag = new TagCompound();
 				a.SaveCustomData(augmentTag);
 				if (augmentTag.Count > 0)
 					customData[a.Id] = augmentTag;
 			}
-			tag["augmentIds"] = ids;
+			tag["ownedAugmentIds"] = new List<string>(ownedIds);
 			tag["augmentCustomData"] = customData;
-			tag["everOwnedIds"] = EverOwnedIds;
-			tag["lockedKeystoneFamilies"] = LockedKeystoneFamilies;
+			tag["everOwnedIds"] = new List<string>(everOwnedIds);
+			tag["soldAugmentIds"] = new List<string>(soldAugmentIds);
+			tag["lockedKeystoneFamilies"] = new List<string>(lockedKeystoneFamilies);
+
+			// TagCompound requires string keys — store NPC type as string.
+			var bossKills = new TagCompound();
+			foreach (var kv in BossAugmentKills)
+				bossKills[kv.Key.ToString()] = kv.Value;
+			tag["bossAugmentKills"] = bossKills;
 		}
 
 		public override void LoadData(TagCompound tag)
 		{
-			Owned.Clear();
-			if (tag.ContainsKey("augmentIds"))
+			ownedIds.Clear();
+			everOwnedIds.Clear();
+			soldAugmentIds.Clear();
+			lockedKeystoneFamilies.Clear();
+
+			string ownedKey = tag.ContainsKey("ownedAugmentIds") ? "ownedAugmentIds" : "augmentIds";
+			if (tag.ContainsKey(ownedKey))
 			{
-				foreach (var id in tag.GetList<string>("augmentIds"))
+				foreach (string id in tag.GetList<string>(ownedKey))
 				{
-					var augment = AugmentDatabase.GetById(id);
-					if (augment != null)
-						Owned.Add(augment);
+					if (ownedIds.Count >= MaxOwnedAugments)
+						break;
+					if (AugmentDatabase.GetById(id) != null)
+						ownedIds.Add(id);
 				}
 			}
 
+			if (tag.ContainsKey("everOwnedIds"))
+				everOwnedIds.UnionWith(tag.GetList<string>("everOwnedIds"));
+			everOwnedIds.UnionWith(ownedIds);
+
+			if (tag.ContainsKey("soldAugmentIds"))
+				soldAugmentIds.UnionWith(tag.GetList<string>("soldAugmentIds"));
+			else
+			{
+				// Legacy saves inferred buyback history as EverOwned minus Owned.
+				foreach (string id in everOwnedIds)
+				{
+					if (!ownedIds.Contains(id))
+						soldAugmentIds.Add(id);
+				}
+			}
+			everOwnedIds.UnionWith(soldAugmentIds);
+
+			if (tag.ContainsKey("lockedKeystoneFamilies"))
+				lockedKeystoneFamilies.UnionWith(tag.GetList<string>("lockedKeystoneFamilies"));
+
+			RebuildOwnedCacheFromOwnedIdsOnly();
+
 			if (tag.GetCompound("augmentCustomData") is TagCompound customData)
 			{
-				foreach (var a in Owned)
+				foreach (var a in owned)
 				{
 					if (customData.GetCompound(a.Id) is TagCompound augmentTag)
 						a.LoadCustomData(augmentTag);
 				}
 			}
 
-			EverOwnedIds.Clear();
-			if (tag.ContainsKey("everOwnedIds"))
-				EverOwnedIds.AddRange(tag.GetList<string>("everOwnedIds"));
-
-			// Saves predate EverOwnedIds tracking - backfill from whatever's
-			// currently owned so pre-existing augments aren't invisible to
-			// "Buy Back" the first time they're later removed.
-			foreach (var a in Owned)
+			BossAugmentKills.Clear();
+			if (tag.ContainsKey("bossAugmentKills"))
 			{
-				if (!EverOwnedIds.Contains(a.Id))
-					EverOwnedIds.Add(a.Id);
+				TagCompound bossKills = tag.GetCompound("bossAugmentKills");
+				foreach (var kv in bossKills)
+				{
+					if (int.TryParse(kv.Key, out int npcType))
+						BossAugmentKills[npcType] = (int)kv.Value;
+				}
 			}
-
-			LockedKeystoneFamilies.Clear();
-			if (tag.ContainsKey("lockedKeystoneFamilies"))
-				LockedKeystoneFamilies.AddRange(tag.GetList<string>("lockedKeystoneFamilies"));
 
 			// Saves predate Keystone tracking too - backfill from whatever
 			// Keystone is currently owned so a save made before this feature
 			// existed still correctly locks out that Keystone's siblings.
-			foreach (var a in Owned)
+			foreach (var a in owned)
 			{
-				if (a.KeystoneFamily != null && !LockedKeystoneFamilies.Contains(a.KeystoneFamily))
-					LockedKeystoneFamilies.Add(a.KeystoneFamily);
+				if (a.KeystoneFamily != null)
+					lockedKeystoneFamilies.Add(a.KeystoneFamily);
 			}
+
+			DebugCheckState("LoadData");
 		}
 	}
 }

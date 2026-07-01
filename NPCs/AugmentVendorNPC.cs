@@ -145,9 +145,7 @@ namespace Augments
         {
             return new List<string>
             {
-                "Augustus",
-                "Ferro",
-                "Vex"
+                "Mommy 2B"
             };
         }
 

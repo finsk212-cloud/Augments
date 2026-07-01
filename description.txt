@@ -1,1 +1,109 @@
-Modify this file with a description of your mod.
+[b]Augments[/b] is a progression-focused Terraria mod that adds permanent character upgrades earned by defeating bosses.
+
+Instead of bosses only dropping items, this mod gives you a choice between several powerful augments after a boss kill. Each augment becomes a permanent part of your character for that playthrough, changing how you fight, survive, and build your character over time.
+
+The goal is to make boss progression feel more exciting and replayable. Every boss kill can push your character in a new direction, letting you slowly create a build that feels different from a normal Terraria run.
+
+[h2]How It Works[/h2]
+
+When you defeat a boss, an augment selection screen appears. You are offered a set of augments and choose one to keep permanently.
+
+Augments are not accessories.
+They do not take inventory space.
+They do not use accessory slots.
+They are saved directly to your character.
+
+Once you choose an augment, you own it permanently on that character. Future boss rewards will avoid showing duplicates, so each new choice keeps expanding your build instead of repeating the same upgrades.
+
+[h2]Current Features[/h2]
+
+[list]
+[*]Boss-kill augment rewards
+[*]Choice-based augment selection UI
+[*]Permanent character augment storage
+[*]No duplicate augment offers
+[*]Augment list panel showing your owned augments
+[*]Hover tooltips for augment descriptions
+[*]Rarity/tier-based boss progression
+[*]Common-tier augments for early progression
+[*]Support for class-specific and universal augments
+[/list]
+
+[h2]Augment Tiers[/h2]
+
+Augments are separated into progression tiers so early bosses do not give upgrades that are too strong too early.
+
+Early-game bosses give starter augments, while later bosses can be used for stronger and more build-changing upgrades as the mod expands.
+
+The system is designed around Terraria’s natural progression curve, so augments can scale from simple early-game effects into more powerful late-game build-defining choices.
+
+[h2]Example Augments[/h2]
+
+[b]Second Wind[/b]
+Drop below low health and heal a burst of HP. This gives you a safety net during dangerous fights.
+
+[b]Bloodletter[/b]
+Melee crits cause enemies to bleed, dealing damage over time.
+
+[b]Vampiric Edge[/b]
+Melee kills heal you for a small amount, rewarding aggressive close-range combat.
+
+[b]Sunder[/b]
+Melee crits apply Ichor, reducing enemy defense for a short time.
+
+[b]Ambush[/b]
+Stand still for a short time to prime your next melee hit for bonus damage based on the weapon’s base damage.
+
+[b]Riposte[/b]
+After an enemy hits you, your next melee hit within a short window deals bonus damage.
+
+[b]Momentum Swing[/b]
+Hitting the same enemy repeatedly builds stacking bonus damage, up to a cap. Switching targets or waiting too long resets the bonus.
+
+[h2]Build Variety[/h2]
+
+The mod is designed to support different playstyles.
+
+Some augments are universal and useful for any character. Others are made for specific combat styles like melee, ranged, magic, or summon.
+
+The long-term goal is for each run to feel different depending on which augments you choose. A melee character might become a bleeding, healing, high-risk bruiser, while a magic or ranged character could eventually build around different effects entirely.
+
+[h2]Why This Mod Exists[/h2]
+
+Terraria already has amazing boss progression, but boss rewards are usually tied to items, accessories, or crafting materials.
+
+This mod adds another layer on top of that: permanent character growth.
+
+Bosses become more than just loot checkpoints. They become moments where your build evolves.
+
+The idea is to create a roguelike-style upgrade system inside Terraria while still keeping the normal Terraria item progression intact.
+
+[h2]Current State[/h2]
+
+This mod is still in development.
+
+Right now, the core system is working:
+boss dies, augment choices appear, you pick one, it saves to your character, and future rewards avoid duplicates.
+
+More augments, more tiers, better balance, and more class-specific effects will be added over time.
+
+Multiplayer support may still be experimental depending on the current version, so singleplayer is the safest way to play while the system is being improved.
+
+[h2]Planned Features[/h2]
+
+[list]
+[*]More Common augments
+[*]Rare and Legendary augment tiers
+[*]More ranged, magic, and summon augments
+[*]More support/team-based augments
+[*]Better visual effects for augment triggers
+[*]More polished UI
+[*]Improved multiplayer support
+[*]Config options for reward frequency and balance
+[/list]
+
+[h2]Notes[/h2]
+
+This mod is inspired by arena-style augment systems and roguelike upgrade mechanics, but built specifically for Terraria’s boss progression.
+
+Feedback is welcome, especially about balance, bugs, multiplayer behavior, and augment ideas.

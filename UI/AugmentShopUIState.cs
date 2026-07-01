@@ -112,16 +112,13 @@ namespace Augments
 			var player = Main.LocalPlayer;
 			var augmentPlayer = player.GetModPlayer<AugmentPlayer>();
 
-			foreach (var id in augmentPlayer.EverOwnedIds)
+			foreach (var id in augmentPlayer.SoldAugmentIds)
 			{
-				if (augmentPlayer.HasAugment(id))
-					continue;
-
 				var augment = AugmentDatabase.GetById(id);
 				if (augment == null)
 					continue;
 
-				int buyBackCost = GetPricing(augment.Rarity).buyBackCost;
+				int buyBackCost = AugmentPlayer.GetBuyBackCost(augment.Rarity);
 				var entry = new AugmentShopEntry(augment, $"Buy ({buyBackCost} Essence)", BuyBack);
 				entry.Width.Set(0f, 1f);
 				entry.Height.Set(50f, 0f);
@@ -130,15 +127,16 @@ namespace Augments
 
 			foreach (var augment in augmentPlayer.Owned)
 			{
-				int removeRefund = GetPricing(augment.Rarity).removeRefund;
+				int removeRefund = AugmentPlayer.GetRemoveRefund(augment.Rarity);
 				string label = removeRefund > 0 ? $"Remove (+{removeRefund} Essence)" : "Remove (Free)";
-				var entry = new AugmentShopEntry(augment, label, RemoveOwned);
+				var entry = new AugmentShopEntry(augment, label, SellOwned);
 				entry.Width.Set(0f, 1f);
 				entry.Height.Set(50f, 0f);
 				removeList.Add(entry);
 			}
 
 			RefreshEssenceText();
+			augmentPlayer.DebugCheckState("AugmentShopUIState.Refresh");
 		}
 
 		private void RefreshEssenceText()
@@ -147,53 +145,38 @@ namespace Augments
 			essenceText.SetText($"Augment Essence: {count}");
 		}
 
-		// Remove is free for Common/Rare and refunds Essence for Epic/Legendary;
-		// Buy Back always costs Essence, priced strictly higher than any Remove
-		// refund for that same rarity - so selling then immediately buying back
-		// always costs the player net Essence, never breaks even or profits.
-		private static (int removeRefund, int buyBackCost) GetPricing(AugmentRarity rarity)
-		{
-			switch (rarity)
-			{
-				case AugmentRarity.Epic:
-					return (1, 2);
-				case AugmentRarity.Legendary:
-					return (2, 4);
-				default: // Common, Rare
-					return (0, 1);
-			}
-		}
-
 		private void BuyBack(Augment augment)
 		{
 			var player = Main.LocalPlayer;
-			int essenceType = ModContent.ItemType<AugmentEssenceItem>();
-			int cost = GetPricing(augment.Rarity).buyBackCost;
+			var augmentPlayer = player.GetModPlayer<AugmentPlayer>();
 
-			if (player.CountItem(essenceType, cost) < cost)
+			if (augmentPlayer.Owned.Count >= AugmentPlayer.MaxOwnedAugments)
+			{
+				Main.NewText("Augment cap reached.", 255, 80, 80);
+				return;
+			}
+
+			int cost = AugmentPlayer.GetBuyBackCost(augment.Rarity);
+			if (player.CountItem(ModContent.ItemType<AugmentEssenceItem>(), cost) < cost)
 			{
 				Main.NewText("Not enough Augment Essence.", 255, 80, 80);
 				return;
 			}
 
-			for (int i = 0; i < cost; i++)
-				player.ConsumeItem(essenceType);
-
-			player.GetModPlayer<AugmentPlayer>().GrantAugment(augment);
-			Refresh();
+			if (Main.netMode == Terraria.ID.NetmodeID.MultiplayerClient)
+				AugmentNet.SendVendorBuyBackRequest(augment.Id);
+			else if (augmentPlayer.BuyBackSoldAugmentByIdServerAuthoritative(augment.Id))
+				Refresh();
 		}
 
-		private void RemoveOwned(Augment augment)
+		private void SellOwned(Augment augment)
 		{
 			var player = Main.LocalPlayer;
-			int refund = GetPricing(augment.Rarity).removeRefund;
-
-			player.GetModPlayer<AugmentPlayer>().RemoveAugment(augment);
-
-			if (refund > 0)
-				player.QuickSpawnItem(player.GetSource_FromThis(), ModContent.ItemType<AugmentEssenceItem>(), refund);
-
-			Refresh();
+			var augmentPlayer = player.GetModPlayer<AugmentPlayer>();
+			if (Main.netMode == Terraria.ID.NetmodeID.MultiplayerClient)
+				AugmentNet.SendVendorSellRequest(augment.Id);
+			else if (augmentPlayer.SellAugmentByIdServerAuthoritative(augment.Id))
+				Refresh();
 		}
 
 		// Small "X" button in the panel's top-right corner. Same manual

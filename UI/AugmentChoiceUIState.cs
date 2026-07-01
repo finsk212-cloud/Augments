@@ -13,6 +13,7 @@ namespace Augments
 		private UIPanel backPanel;
 		private readonly List<AugmentChoiceCard> cards = new List<AugmentChoiceCard>();
 		private RerollButton rerollButton;
+		private UIText capNoticeText;
 
 		// Rarity tier this popup's cards were rolled at - a reroll must stay
 		// on this same tier, not re-roll a fresh (possibly different) one.
@@ -21,6 +22,7 @@ namespace Augments
 		// Exactly one reroll per popup, no matter how much Essence is
 		// stockpiled - reset to false only when a fresh popup is shown.
 		private bool rerollUsed;
+		private bool networkReward;
 
 		// --- Keystone confirmation overlay ---
 		// Appended/removed from `this` (the root UIState, not backPanel) so it
@@ -35,7 +37,7 @@ namespace Augments
 		private const float PanelWidth = 860f;
 		private const float CardWidth = 270f;
 		private const float CardSpacing = 14f;
-		private const float CardsTop = 48f;
+		private const float CardsTop = 68f;
 		private const float BottomMargin = 24f;
 
 		// Dedicated strip below the cards for the reroll button - kept as its
@@ -68,6 +70,14 @@ namespace Augments
 			};
 			titleText.Top.Set(15f, 0f);
 			backPanel.Append(titleText);
+
+			capNoticeText = new UIText("", 0.8f)
+			{
+				HAlign = 0.5f,
+				TextColor = AugmentTextColors.Cooldown
+			};
+			capNoticeText.Top.Set(42f, 0f);
+			backPanel.Append(capNoticeText);
 
 			rerollButton = new RerollButton();
 			rerollButton.Width.Set(200f, 0f);
@@ -149,13 +159,15 @@ namespace Augments
 		// Call this right before showing the panel - replaces whatever cards
 		// were there with a fresh set built from the given augments, and resets
 		// this popup's reroll allowance.
-		public void SetChoices(List<Augment> choices, AugmentRarity rarity)
+		public void SetChoices(List<Augment> choices, AugmentRarity rarity, bool networkReward = false)
 		{
 			currentRarity = rarity;
 			rerollUsed = false;
+			this.networkReward = networkReward;
 			HideKeystoneConfirm();
 
 			RebuildCards(choices);
+			RefreshCapNotice();
 			RefreshRerollButton();
 		}
 
@@ -239,10 +251,22 @@ namespace Augments
 
 		private void GrantAndClose(Augment augment)
 		{
-			Main.LocalPlayer.GetModPlayer<AugmentPlayer>().GrantAugment(augment);
+			var player = Main.LocalPlayer;
+			var ap = player.GetModPlayer<AugmentPlayer>();
+
+			ap.ChooseReward(augment);
+
 			pendingKeystone = null;
 			RemoveChild(confirmOverlay);
 			ModContent.GetInstance<AugmentUISystem>().HidePanel();
+		}
+
+		private void RefreshCapNotice()
+		{
+			var ap = Main.LocalPlayer.GetModPlayer<AugmentPlayer>();
+			capNoticeText.SetText(ap.Owned.Count >= AugmentPlayer.MaxOwnedAugments
+				? "Augment slots full - selection will be sold to Mommy 2B."
+				: "");
 		}
 
 		private static string JoinWithAnd(List<string> names)
@@ -260,6 +284,9 @@ namespace Augments
 			// Hard gate - this is re-checked here regardless of the button's
 			// own visual enabled state, since this bool is the entire point
 			// of the feature and must hold even with a large Essence stockpile.
+			if (networkReward)
+				return;
+
 			if (rerollUsed)
 				return;
 
@@ -282,6 +309,12 @@ namespace Augments
 
 		private void RefreshRerollButton()
 		{
+			if (networkReward)
+			{
+				rerollButton.SetEnabled(false, "Server Reward");
+				return;
+			}
+
 			if (rerollUsed)
 			{
 				rerollButton.SetEnabled(false, "Reroll Used");

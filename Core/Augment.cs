@@ -2,6 +2,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Terraria;
 using Terraria.DataStructures;
+using Terraria.ModLoader;
 using Terraria.ModLoader.IO;
 
 namespace Augments
@@ -65,6 +66,10 @@ namespace Augments
 		// True for augments whose effect operates on a proximity radius around the
 		// owner — used by AugmentAuraDrawer to decide whether to show the aura circle.
 		public virtual bool HasAuraEffect => false;
+
+		// Non-null for augments triggered by a keybind (e.g. Cleanse).
+		// AugmentListEntry reads this to show a "no key bound" hint when unset.
+		public virtual ModKeybind ActiveModKeybind => null;
 
 		// Additive contribution to the player's TotalFortune (see
 		// AugmentPlayer.TotalFortune), summed live across every owned augment -
@@ -132,6 +137,11 @@ namespace Augments
 		// behind the countdown/value text. Null (the default) means "no icon,
 		// just show the number" - the original indicator behavior.
 		public virtual Texture2D Icon => null;
+
+		// Fires once when the player dies (after PreKill allows death through).
+		// respawnTimer is already set by vanilla before this fires, so reading
+		// or modifying it here reflects the correct starting value.
+		public virtual void OnKill(Player player) { }
 
 		// Fires exactly once, the instant the player picks this augment.
 		// Good for one-time setup, not for anything that needs to keep happening.
