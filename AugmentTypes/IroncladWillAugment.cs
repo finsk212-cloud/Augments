@@ -1,4 +1,4 @@
-using Terraria;
+﻿using Terraria;
 using Terraria.ModLoader;
 
 namespace Augments
@@ -23,13 +23,13 @@ namespace Augments
         // bypasses defense for the one hit that procs it.
         public override void ModifyHitNPCWithItem(Player player, Item item, NPC target, ref NPC.HitModifiers modifiers)
         {
-            if (item.DamageType == DamageClass.Melee && Main.rand.NextFloat() < ProcChance)
+            if (item.CountsAsClass(DamageClass.Melee) && Main.rand.NextFloat() < ProcChance)
                 modifiers.ScalingArmorPenetration += 1f;
         }
 
         public override void ModifyHitNPCWithProj(Player player, Projectile proj, NPC target, ref NPC.HitModifiers modifiers)
         {
-            if (proj.DamageType == DamageClass.Melee && Main.rand.NextFloat() < ProcChance)
+            if (proj.CountsAsClass(DamageClass.Melee) && Main.rand.NextFloat() < ProcChance)
                 modifiers.ScalingArmorPenetration += 1f;
         }
     }

@@ -223,6 +223,7 @@ namespace Augments
 				return;
 
 			Main.player[playerIndex].GetModPlayer<AugmentPlayer>().ReadAugmentState(reader);
+			ModContent.GetInstance<Augments>().Logger.Info($"Synced support state for player={Main.player[playerIndex].name}");
 			if (playerIndex == Main.myPlayer)
 				ModContent.GetInstance<AugmentUISystem>().RefreshOpenPlayerPanels();
 		}
@@ -261,7 +262,7 @@ namespace Augments
 
 			Player player = Main.player[whoAmI];
 			if (player.active)
-				AugmentRewardLogic.GrantReward(player, RarityBracket.Endgame);
+				AugmentRewardLogic.GrantReward(player, RarityBracket.FinalCalamity);
 		}
 
 		private static void HandleDebugCommandRequest(BinaryReader reader, int whoAmI)

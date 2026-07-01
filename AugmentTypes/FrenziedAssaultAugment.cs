@@ -1,4 +1,4 @@
-using Terraria;
+﻿using Terraria;
 using Terraria.ModLoader;
 
 namespace Augments
@@ -39,13 +39,13 @@ namespace Augments
 
 		public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
 		{
-			if (item.DamageType == DamageClass.Melee && hit.Crit)
+			if (item.CountsAsClass(DamageClass.Melee) && hit.Crit)
 				RegisterCrit();
 		}
 
 		public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
 		{
-			if (proj.DamageType == DamageClass.Melee && hit.Crit)
+			if (proj.CountsAsClass(DamageClass.Melee) && hit.Crit)
 				RegisterCrit();
 		}
 

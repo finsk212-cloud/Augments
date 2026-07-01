@@ -1,4 +1,4 @@
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.ModLoader;
 
@@ -29,7 +29,7 @@ namespace Augments
             AugmentHitSource source,
             float effectiveness)
         {
-            if (source == AugmentHitSource.NormalAttack && item.DamageType == DamageClass.Melee)
+            if (source == AugmentHitSource.NormalAttack && item.CountsAsClass(DamageClass.Melee))
                 RegisterMeleeHit(player, target);
         }
 
@@ -41,7 +41,7 @@ namespace Augments
             AugmentHitSource source,
             float effectiveness)
         {
-            if (source == AugmentHitSource.NormalAttack && proj.DamageType == DamageClass.Melee)
+            if (source == AugmentHitSource.NormalAttack && proj.CountsAsClass(DamageClass.Melee))
                 RegisterMeleeHit(player, target);
         }
 

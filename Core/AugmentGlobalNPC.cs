@@ -15,6 +15,9 @@ namespace Augments
         // Note: boss AI often re-overrides npc.target mid-AI; Taunt is best-effort for non-bosses.
         public override bool PreAI(NPC npc)
         {
+            if (Main.netMode == NetmodeID.MultiplayerClient)
+                return true;
+
             if (!npc.friendly && !npc.townNPC && !npc.dontTakeDamage)
             {
                 for (int i = 0; i < Main.maxPlayers; i++)

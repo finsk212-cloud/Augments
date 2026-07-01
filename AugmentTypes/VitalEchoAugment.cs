@@ -1,4 +1,5 @@
 using Terraria;
+using Terraria.ModLoader;
 
 namespace Augments
 {
@@ -13,11 +14,7 @@ namespace Augments
         public override AugmentRarity Rarity => AugmentRarity.Common;
         public override AugmentClass Class => AugmentClass.Universal;
 
-        private const int DurationTicks = 180;
         private const int DefenseBonus = 6;
-
-        private int lastLife = -1;
-        private int defenseTicksRemaining;
 
         // Comparing statLife to its value last tick is the universal way to
         // catch ANY healing source (potion, Second Wind, natural regen,
@@ -26,18 +23,12 @@ namespace Augments
         // what caused it.
         public override void OnUpdate(Player player)
         {
-            if (lastLife != -1 && player.statLife > lastLife)
-                defenseTicksRemaining = DurationTicks;
-
-            lastLife = player.statLife;
-
-            if (defenseTicksRemaining > 0)
-                defenseTicksRemaining--;
+            player.GetModPlayer<AugmentPlayer>().TickVitalEcho();
         }
 
         public override void UpdateEquips(Player player)
         {
-            if (defenseTicksRemaining > 0)
+            if (player.GetModPlayer<AugmentPlayer>().HasVitalEchoDefense)
                 player.statDefense += DefenseBonus;
         }
     }

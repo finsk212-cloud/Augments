@@ -136,7 +136,6 @@ namespace Augments
 			}
 
 			RefreshEssenceText();
-			augmentPlayer.DebugCheckState("AugmentShopUIState.Refresh");
 		}
 
 		private void RefreshEssenceText()

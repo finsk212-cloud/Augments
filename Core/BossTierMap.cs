@@ -6,10 +6,12 @@ namespace Augments
 	public enum RarityBracket
 	{
 		PreHardmode,
-		WallOfFlesh,
-		HardmodePrePlantera,
-		PlanteraPlus,
-		Endgame
+		EarlyHardmode,
+		PostMechs,
+		PostPlantera,
+		EarlyPostMoonLord,
+		LatePostMoonLord,
+		FinalCalamity
 	}
 
 	// Maps a boss's NPC type to the bracket of rarities it should roll from.
@@ -30,24 +32,24 @@ namespace Augments
 			{ NPCID.Deerclops, RarityBracket.PreHardmode },
 
 			// --- Wall of Flesh ---
-			{ NPCID.WallofFlesh, RarityBracket.WallOfFlesh },
+			{ NPCID.WallofFlesh, RarityBracket.EarlyHardmode },
 
 			// --- Early/mid hardmode ---
-			{ NPCID.QueenSlimeBoss, RarityBracket.HardmodePrePlantera },
-			{ NPCID.Retinazer, RarityBracket.HardmodePrePlantera },
-			{ NPCID.Spazmatism, RarityBracket.HardmodePrePlantera },
-			{ NPCID.TheDestroyer, RarityBracket.HardmodePrePlantera },
-			{ NPCID.SkeletronPrime, RarityBracket.HardmodePrePlantera },
+			{ NPCID.QueenSlimeBoss, RarityBracket.EarlyHardmode },
+			{ NPCID.Retinazer, RarityBracket.PostMechs },
+			{ NPCID.Spazmatism, RarityBracket.PostMechs },
+			{ NPCID.TheDestroyer, RarityBracket.PostMechs },
+			{ NPCID.SkeletronPrime, RarityBracket.PostMechs },
 
 			// --- Plantera and beyond ---
-			{ NPCID.Plantera, RarityBracket.PlanteraPlus },
-			{ NPCID.Golem, RarityBracket.PlanteraPlus },
-			{ NPCID.DukeFishron, RarityBracket.PlanteraPlus },
-			{ NPCID.HallowBoss, RarityBracket.PlanteraPlus }, // Empress of Light
+			{ NPCID.Plantera, RarityBracket.PostPlantera },
+			{ NPCID.Golem, RarityBracket.PostPlantera },
+			{ NPCID.DukeFishron, RarityBracket.PostPlantera },
+			{ NPCID.HallowBoss, RarityBracket.PostPlantera }, // Empress of Light
 
 			// --- Endgame ---
-			{ NPCID.CultistBoss, RarityBracket.Endgame }, // Lunatic Cultist
-			{ NPCID.MoonLordCore, RarityBracket.Endgame },
+			{ NPCID.CultistBoss, RarityBracket.PostPlantera }, // Lunatic Cultist
+			{ NPCID.MoonLordCore, RarityBracket.EarlyPostMoonLord },
 		};
 
 		public static RarityBracket GetBracket(int npcType)

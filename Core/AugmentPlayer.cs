@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using Microsoft.Xna.Framework;
 using Terraria;
+using Terraria.Audio;
 using Terraria.DataStructures;
 using Terraria.GameInput;
 using Terraria.ID;
@@ -58,13 +59,14 @@ namespace Augments
 			everOwnedIds.Add(id);
 			if (augment.KeystoneFamily != null)
 				lockedKeystoneFamilies.Add(augment.KeystoneFamily);
+			if (id == "revitalizing_wave")
+				RevitalizingWaveTimer = 1200;
+			else if (id == "cleanse")
+				CleanseCooldown = 0;
 
 			RebuildOwnedCacheFromOwnedIdsOnly();
 			augment.OnAcquire(Player);
-			if (Main.netMode != NetmodeID.Server)
-				Main.NewText($"Augment acquired: {augment.DisplayName}", 255, 215, 0);
 
-			DebugCheckState("GrantAugmentByIdServerAuthoritative");
 			if (sync && Main.netMode == NetmodeID.Server)
 				AugmentNet.SendSyncPlayer(Player);
 			return true;
@@ -76,7 +78,6 @@ namespace Augments
 				return false;
 
 			RebuildOwnedCacheFromOwnedIdsOnly();
-			DebugCheckState("RemoveAugmentByIdServerAuthoritative");
 			if (sync && Main.netMode == NetmodeID.Server)
 				AugmentNet.SendSyncPlayer(Player);
 			return true;
@@ -102,7 +103,6 @@ namespace Augments
 			if (refund > 0)
 				SpawnEssenceRefund(refund);
 
-			DebugCheckState("SellAugmentByIdServerAuthoritative");
 			if (sync && Main.netMode == NetmodeID.Server)
 				AugmentNet.SendSyncPlayer(Player);
 			return true;
@@ -134,7 +134,6 @@ namespace Augments
 			if (Main.netMode == NetmodeID.Server)
 				SyncInventory();
 
-			DebugCheckState("BuyBackSoldAugmentByIdServerAuthoritative");
 			if (sync && Main.netMode == NetmodeID.Server)
 				AugmentNet.SendSyncPlayer(Player);
 			return true;
@@ -176,7 +175,6 @@ namespace Augments
 					Main.NewText(msg, 180, 220, 255);
 				}
 
-				DebugCheckState("ApplyRewardAugmentSoldAtCap");
 				if (sync && Main.netMode == NetmodeID.Server)
 					AugmentNet.SendSyncPlayer(Player);
 
@@ -252,6 +250,8 @@ namespace Augments
 		public bool ReceivedSwiftnessAura;
 		public bool ReceivedManaWell;
 		public bool ReceivedCombatMedic;
+		public int RevitalizingWaveTimer = 1200;
+		public int CleanseCooldown;
 
 		// Per-player cooldowns for triggered Support auras (Last Rites, Lifeline).
 		// Volatile — not saved to disk. 90s = 5400 ticks at 60 ticks/sec.
@@ -259,6 +259,25 @@ namespace Augments
 		private int lastRitesInvulnTicks;
 		public int LifelineCooldown;
 		private int lifelineInvulnTicks;
+		private bool lifelineProtectionAuthorized;
+		private bool undyingBondRedirectSent;
+		private int undyingBondRequestTimer;
+		private int mendingAuraHealTimer;
+		private int vitalEchoLastLife = -1;
+		private int vitalEchoDefenseTicks;
+		private int soulLinkRequestCooldown;
+
+		// Per-player state for augments that previously stored data on the singleton.
+		// Moved here so multiple players in multiplayer don't share the same counter.
+		public HashSet<int> TrophyHunterKilledTypes = new HashSet<int>();
+		public int LuckyFindCopperGained;
+
+		// Snapshot taken by CopyClientState each tick for change detection.
+		// Only used by SendClientChanges; not persisted and never read by game logic.
+		private HashSet<string> syncedOwnedIds = new HashSet<string>();
+
+		public bool LifelineProtectionAuthorized => lifelineProtectionAuthorized;
+		public bool HasVitalEchoDefense => vitalEchoDefenseTicks > 0;
 
 		// Picks up to `count` random augments of the given rarity that the
 		// player doesn't already own, no repeats. With any TotalFortune,
@@ -321,6 +340,8 @@ namespace Augments
 			foreach (var a in Owned)
 				a.OnUpdate(Player);
 
+			UpdateSupportAuthorityState();
+
 			// Keep the Support Class buff active while any Support augment is owned.
 			// Short duration refreshed every tick — expires within 3 frames if removed.
 			if (SupportAugmentCount >= 1)
@@ -332,9 +353,7 @@ namespace Augments
 			for (int i = 0; i < Main.maxPlayers; i++)
 			{
 				Player other = Main.player[i];
-				if (!other.active || other.dead || other == Player)
-					continue;
-				if (Vector2.Distance(Player.Center, other.Center) > AuraRadius)
+				if (!SupportEffects.IsAllyInRange(other, Player, AuraRadius))
 					continue;
 				var otherAP = other.GetModPlayer<AugmentPlayer>();
 				if (!otherAP.HasAugment("warcry"))
@@ -354,7 +373,6 @@ namespace Augments
 			// each frame while it's active. Re-assertion is required because vanilla
 			// overwrites player.immuneTime with its own short post-hit window every
 			// tick — a one-shot set doesn't survive. See PhoenixHeartAugment for detail.
-			if (LastRitesCooldown > 0) LastRitesCooldown--;
 			if (lastRitesInvulnTicks > 0)
 			{
 				Player.immune = true;
@@ -362,7 +380,6 @@ namespace Augments
 				lastRitesInvulnTicks--;
 			}
 
-			if (LifelineCooldown > 0) LifelineCooldown--;
 			if (lifelineInvulnTicks > 0)
 			{
 				Player.immune = true;
@@ -370,27 +387,156 @@ namespace Augments
 				lifelineInvulnTicks--;
 			}
 
-			// Last Rites pull check: fires on the local player's own client when
-			// they drop below 20% HP and no cooldown is active. Finds a nearby
-			// Support player with the augment and grants 3s invulnerability.
-			if (Player.statLife <= (int)(Player.statLifeMax2 * 0.20f) && LastRitesCooldown == 0)
+		}
+
+		private void UpdateSupportAuthorityState()
+		{
+			if (CleanseCooldown > 0)
+				CleanseCooldown--;
+			if (LastRitesCooldown > 0)
+				LastRitesCooldown--;
+			if (LifelineCooldown > 0)
+				LifelineCooldown--;
+			if (soulLinkRequestCooldown > 0)
+				soulLinkRequestCooldown--;
+
+			if (HasAugment("revitalizing_wave"))
 			{
-				for (int i = 0; i < Main.maxPlayers; i++)
+				if (RevitalizingWaveTimer > 0)
+					RevitalizingWaveTimer--;
+
+				if (RevitalizingWaveTimer == 0 && Main.netMode != NetmodeID.MultiplayerClient)
 				{
-					Player other = Main.player[i];
-					if (!other.active || other.dead || other == Player)
-						continue;
-					if (Vector2.Distance(Player.Center, other.Center) > AuraRadius)
-						continue;
-					var otherAP = other.GetModPlayer<AugmentPlayer>();
-					if (!otherAP.HasAugment("last_rites"))
-						continue;
-					LastRitesCooldown = 5400;
-					lastRitesInvulnTicks = 180;
-					Player.AddBuff(ModContent.BuffType<LastRitesCooldownBuff>(), 5400);
-					break;
+					bool healedAny = false;
+					foreach (Player target in Main.player)
+					{
+						if (!SupportEffects.IsAllyInRange(Player, target, SupportEffects.AuraRadius))
+							continue;
+
+						ModContent.GetInstance<Augments>().Logger.Info($"Revitalizing Wave trigger owner={Player.name} target={target.name} netMode={Main.netMode}");
+						SupportEffects.ServerHealPlayer(target, 25);
+						healedAny = true;
+					}
+
+					if (healedAny)
+					{
+						RevitalizingWaveTimer = 1200;
+						if (Main.netMode == NetmodeID.Server)
+						{
+							SupportEffects.BroadcastRevitalizingWaveVisual(Player);
+							AugmentNet.SendSyncPlayer(Player);
+						}
+						else
+						{
+							RevitalizingWaveAugment.SpawnBurst(Player);
+						}
+					}
 				}
 			}
+
+			if (Main.netMode == NetmodeID.MultiplayerClient)
+				return;
+
+			if (Player.statLife <= (int)(Player.statLifeMax2 * 0.20f) && LastRitesCooldown == 0 &&
+				SupportEffects.TryFindSupportOwner(Player, "last_rites", AuraRadius, out _))
+			{
+				LastRitesCooldown = 5400;
+				lastRitesInvulnTicks = 180;
+				Player.AddBuff(ModContent.BuffType<LastRitesCooldownBuff>(), 5400);
+				if (Main.netMode == NetmodeID.Server)
+				{
+					NetMessage.SendData(MessageID.PlayerBuffs, -1, -1, null, Player.whoAmI);
+					AugmentNet.SendSyncPlayer(Player);
+				}
+			}
+
+			bool protection = LifelineCooldown == 0 && SupportEffects.TryFindSupportOwner(Player, "lifeline", AuraRadius, out _);
+			if (protection != lifelineProtectionAuthorized)
+			{
+				lifelineProtectionAuthorized = protection;
+				if (Main.netMode == NetmodeID.Server)
+					AugmentNet.SendSyncPlayer(Player);
+			}
+		}
+
+		public bool TryTriggerCleanseServer()
+		{
+			if (Main.netMode == NetmodeID.MultiplayerClient || !HasAugment("cleanse") || CleanseCooldown > 0 || Player.dead)
+				return false;
+
+			CleanseCooldown = 1800;
+			foreach (Player target in Main.player)
+			{
+				if (SupportEffects.IsAllyInRange(Player, target, SupportEffects.AuraRadius))
+					SupportEffects.ServerClearDebuffs(target);
+			}
+
+			if (Main.netMode == NetmodeID.Server)
+				AugmentNet.SendSyncPlayer(Player);
+			return true;
+		}
+
+		public bool TryAuthorizeSoulLinkRequest()
+		{
+			if (Main.netMode != NetmodeID.Server || !HasAugment("soul_link") || Player.dead || soulLinkRequestCooldown > 0)
+				return false;
+
+			soulLinkRequestCooldown = 30;
+			return true;
+		}
+
+		public bool TryConsumeLifelineServer()
+		{
+			if (Main.netMode == NetmodeID.MultiplayerClient || LifelineCooldown > 0 ||
+				!SupportEffects.TryFindSupportOwner(Player, "lifeline", AuraRadius, out Player owner))
+				return false;
+
+			ModContent.GetInstance<Augments>().Logger.Info($"Undying Bond found support owner={owner.name}");
+			LifelineCooldown = 5400;
+			lifelineInvulnTicks = 120;
+			lifelineProtectionAuthorized = false;
+			Player.dead = false;
+			Player.statLife = 1;
+			Player.AddBuff(ModContent.BuffType<LifelineCooldownBuff>(), 5400);
+
+			if (Main.netMode == NetmodeID.Server)
+			{
+				NetMessage.SendData(MessageID.PlayerLifeMana, -1, -1, null, Player.whoAmI);
+				NetMessage.SendData(MessageID.PlayerBuffs, -1, -1, null, Player.whoAmI);
+				AugmentNet.SendSyncPlayer(Player);
+			}
+
+			ModContent.GetInstance<Augments>().Logger.Info($"Undying Bond consumed and saved target={Player.name}");
+			return true;
+		}
+
+		public void TickMendingAura()
+		{
+			if (Main.netMode == NetmodeID.MultiplayerClient)
+				return;
+
+			if (Player.velocity.LengthSquared() >= 0.01f)
+			{
+				mendingAuraHealTimer = 0;
+				return;
+			}
+
+			mendingAuraHealTimer++;
+			if (mendingAuraHealTimer < 60)
+				return;
+
+			mendingAuraHealTimer = 0;
+			SupportEffects.ServerHealPlayer(Player, 5);
+		}
+
+		public void TickVitalEcho()
+		{
+			if (vitalEchoLastLife != -1 && Player.statLife > vitalEchoLastLife)
+				vitalEchoDefenseTicks = 180;
+
+			vitalEchoLastLife = Player.statLife;
+			if (vitalEchoDefenseTicks > 0)
+				vitalEchoDefenseTicks--;
 		}
 
 		public override void PostUpdateRunSpeeds()
@@ -405,9 +551,7 @@ namespace Augments
 			for (int i = 0; i < Main.maxPlayers; i++)
 			{
 				Player other = Main.player[i];
-				if (!other.active || other.dead || other == Player)
-					continue;
-				if (Vector2.Distance(Player.Center, other.Center) > AuraRadius)
+				if (!SupportEffects.IsAllyInRange(other, Player, AuraRadius))
 					continue;
 				var otherAP = other.GetModPlayer<AugmentPlayer>();
 				if (!otherAP.HasAugment("swiftness_aura"))
@@ -462,9 +606,7 @@ namespace Augments
 			for (int i = 0; i < Main.maxPlayers; i++)
 			{
 				Player other = Main.player[i];
-				if (!other.active || other.dead || other == Player)
-					continue;
-				if (Vector2.Distance(Player.Center, other.Center) > AuraRadius)
+				if (!SupportEffects.IsAllyInRange(other, Player, AuraRadius))
 					continue;
 				var otherAP = other.GetModPlayer<AugmentPlayer>();
 				if (!otherAP.HasAugment("ironclad_aura"))
@@ -490,9 +632,7 @@ namespace Augments
 			for (int i = 0; i < Main.maxPlayers; i++)
 			{
 				Player other = Main.player[i];
-				if (!other.active || other.dead || other == Player)
-					continue;
-				if (Vector2.Distance(Player.Center, other.Center) > AuraRadius)
+				if (!SupportEffects.IsAllyInRange(other, Player, AuraRadius))
 					continue;
 				var otherAP = other.GetModPlayer<AugmentPlayer>();
 				if (!otherAP.HasAugment("mana_well"))
@@ -514,9 +654,7 @@ namespace Augments
 			for (int i = 0; i < Main.maxPlayers; i++)
 			{
 				Player other = Main.player[i];
-				if (!other.active || other.dead || other == Player)
-					continue;
-				if (Vector2.Distance(Player.Center, other.Center) > AuraRadius)
+				if (!SupportEffects.IsAllyInRange(other, Player, AuraRadius))
 					continue;
 				var otherAP = other.GetModPlayer<AugmentPlayer>();
 				if (!otherAP.HasAugment("combat_medic"))
@@ -542,13 +680,26 @@ namespace Augments
 			if (Augments.OpenAugmentListKeybind.JustPressed)
 				ModContent.GetInstance<AugmentUISystem>().ToggleList();
 
+			if (HasAugment("cleanse") && CleanseCooldown == 0 && Augments.CleanseKeybind?.JustPressed == true)
+			{
+				SoundEngine.PlaySound(SoundID.Item4, Player.Center);
+				if (Main.netMode == NetmodeID.SinglePlayer)
+					TryTriggerCleanseServer();
+				else if (Main.netMode == NetmodeID.MultiplayerClient)
+				{
+					ModPacket packet = ModContent.GetInstance<Augments>().GetPacket();
+					packet.Write((byte)AugmentPacketType.CleanseRequest);
+					packet.Send();
+				}
+			}
+
 			// Debug: pop the reward choice UI without killing a boss. Endgame
 			// is hardcoded since it's the bracket that can roll all 4
 			// rarities via fallback, which is most useful for testing.
 			if (Augments.DebugTriggerPopupKeybind.JustPressed)
 			{
 				if (Main.netMode == NetmodeID.SinglePlayer)
-					AugmentRewardLogic.GrantReward(Player, RarityBracket.Endgame);
+				AugmentRewardLogic.GrantReward(Player, RarityBracket.FinalCalamity);
 				else if (Main.netMode == NetmodeID.MultiplayerClient)
 					AugmentNet.SendDebugRewardRequest();
 			}
@@ -683,9 +834,7 @@ namespace Augments
 			for (int i = 0; i < Main.maxPlayers; i++)
 			{
 				Player other = Main.player[i];
-				if (!other.active || other.dead || other == Player)
-					continue;
-				if (Vector2.Distance(Player.Center, other.Center) > AuraRadius)
+				if (!SupportEffects.IsAllyInRange(other, Player, AuraRadius))
 					continue;
 				var otherAP = other.GetModPlayer<AugmentPlayer>();
 				if (!otherAP.HasAugment("martyrs_resolve"))
@@ -699,28 +848,20 @@ namespace Augments
 		// Returning false prevents death; returning true allows it.
 		public override bool PreKill(double damage, int hitDirection, bool pvp, ref bool playSound, ref bool genGore, ref PlayerDeathReason damageSource)
 		{
-			if (LifelineCooldown > 0)
+			if (LifelineCooldown > 0 || !lifelineProtectionAuthorized)
 				return true;
 
-			for (int i = 0; i < Main.maxPlayers; i++)
+			if (Main.netMode == NetmodeID.MultiplayerClient)
 			{
-				Player other = Main.player[i];
-				if (!other.active || other.dead || other == Player)
-					continue;
-				if (Vector2.Distance(Player.Center, other.Center) > AuraRadius)
-					continue;
-				var otherAP = other.GetModPlayer<AugmentPlayer>();
-				if (!otherAP.HasAugment("lifeline"))
-					continue;
-
-				LifelineCooldown = 5400;
-				lifelineInvulnTicks = 120;
+				ModPacket packet = ModContent.GetInstance<Augments>().GetPacket();
+				packet.Write((byte)AugmentPacketType.LifelineTrigger);
+				packet.Send();
+				lifelineProtectionAuthorized = false;
 				Player.statLife = 1;
-				Player.AddBuff(ModContent.BuffType<LifelineCooldownBuff>(), 5400);
 				return false;
 			}
 
-			return true;
+			return !TryConsumeLifelineServer();
 		}
 
 		// Undying Bond: fires every tick while the local player is dead.
@@ -731,34 +872,62 @@ namespace Augments
 		// work in singleplayer and a ModPacket sync will be needed for multiplayer.
 		public override void UpdateDead()
 		{
-			Player nearest = null;
-			float nearestDist = float.MaxValue;
-
-			for (int i = 0; i < Main.maxPlayers; i++)
+			if (undyingBondRedirectSent)
+				return;
+			if (undyingBondRequestTimer > 0)
 			{
-				Player other = Main.player[i];
-				if (!other.active || other.dead || other == Player)
-					continue;
-				var otherAP = other.GetModPlayer<AugmentPlayer>();
-				if (!otherAP.HasAugment("undying_bond"))
-					continue;
-				float dist = Vector2.Distance(Player.Center, other.Center);
-				if (dist < nearestDist)
-				{
-					nearestDist = dist;
-					nearest = other;
-				}
+				undyingBondRequestTimer--;
+				return;
 			}
 
-			if (nearest != null)
+			if (Main.netMode == NetmodeID.MultiplayerClient)
 			{
-				Player.SpawnX = (int)(nearest.Center.X / 16f);
-				Player.SpawnY = (int)(nearest.Center.Y / 16f);
+				ModPacket packet = ModContent.GetInstance<Augments>().GetPacket();
+				packet.Write((byte)AugmentPacketType.UndyingBondRequest);
+				packet.Send();
+				undyingBondRequestTimer = 60;
+				return;
 			}
+
+			if (!TryApplyUndyingBondRedirectServer())
+				undyingBondRequestTimer = 60;
+		}
+
+		public bool TryApplyUndyingBondRedirectServer()
+		{
+			if (Main.netMode == NetmodeID.MultiplayerClient || undyingBondRedirectSent)
+				return false;
+			ModContent.GetInstance<Augments>().Logger.Info($"Undying Bond check target={Player.name}");
+			if (!SupportEffects.TryFindSupportOwner(Player, "undying_bond", -1f, out Player owner))
+				return false;
+
+			Player.SpawnX = (int)(owner.Center.X / 16f);
+			Player.SpawnY = (int)(owner.Center.Y / 16f);
+			undyingBondRedirectSent = true;
+			ModContent.GetInstance<Augments>().Logger.Info($"Undying Bond found support owner={owner.name}");
+			if (Main.netMode == NetmodeID.Server)
+				SupportEffects.SendUndyingBondRedirect(Player, Player.SpawnX, Player.SpawnY);
+			return true;
+		}
+
+		public void ApplyUndyingBondRedirectClient(int spawnX, int spawnY)
+		{
+			if (Main.netMode != NetmodeID.MultiplayerClient)
+				return;
+
+			Player.SpawnX = spawnX;
+			Player.SpawnY = spawnY;
+			undyingBondRedirectSent = true;
 		}
 
 		public override void Kill(double damage, int hitDirection, bool pvp, PlayerDeathReason damageSource)
 		{
+			undyingBondRedirectSent = false;
+			undyingBondRequestTimer = 0;
+			mendingAuraHealTimer = 0;
+			vitalEchoLastLife = -1;
+			vitalEchoDefenseTicks = 0;
+			soulLinkRequestCooldown = 0;
 			foreach (var a in Owned)
 				a.OnKill(Player);
 		}
@@ -824,6 +993,15 @@ namespace Augments
 		private void RebuildOwnedCacheFromOwnedIdsOnly()
 		{
 			owned.Clear();
+			RevitalizingWaveTimer = 1200;
+			CleanseCooldown = 0;
+			LastRitesCooldown = 0;
+			lastRitesInvulnTicks = 0;
+			LifelineCooldown = 0;
+			lifelineInvulnTicks = 0;
+			lifelineProtectionAuthorized = false;
+			undyingBondRedirectSent = false;
+			undyingBondRequestTimer = 0;
 			foreach (string id in ownedIds)
 			{
 				Augment augment = AugmentDatabase.GetById(id);
@@ -831,26 +1009,6 @@ namespace Augments
 					owned.Add(augment);
 			}
 
-			DebugCheckState("RebuildOwnedCacheFromOwnedIdsOnly");
-		}
-
-		public void DebugCheckState(string where)
-		{
-			foreach (string id in soldAugmentIds)
-			{
-				if (!ownedIds.Contains(id))
-					continue;
-
-				string bug = $"BUG STATE at {where}: {id} is BOTH owned and sold";
-				ModContent.GetInstance<Augments>().Logger.Error(bug);
-				if (Main.netMode != NetmodeID.Server && !Main.dedServ)
-					Main.NewText(bug, 255, 80, 80);
-			}
-
-			string state = $"{where} ({Player.name}): Owned=[{string.Join(",", ownedIds)}] Sold=[{string.Join(",", soldAugmentIds)}] Ever=[{string.Join(",", everOwnedIds)}]";
-			ModContent.GetInstance<Augments>().Logger.Info(state);
-			if (Main.netMode != NetmodeID.Server && !Main.dedServ)
-				Main.NewText(state, 180, 180, 180);
 		}
 
 		private void SyncInventory()
@@ -862,6 +1020,64 @@ namespace Augments
 				NetMessage.SendData(MessageID.SyncEquipment, -1, -1, null, Player.whoAmI, slot, Player.inventory[slot].prefix);
 		}
 
+		// tModLoader calls CopyClientState each tick on the LOCAL player, copies
+		// current state into a throw-away clone, then immediately calls
+		// SendClientChanges with that clone as the "before" picture. If anything
+		// changed, SendClientChanges fires a packet so the server (and from there
+		// all other clients) can update their ghost copy of this player.
+		public override void CopyClientState(ModPlayer targetCopy)
+		{
+			var snapshot = (AugmentPlayer)targetCopy;
+			snapshot.syncedOwnedIds.Clear();
+			snapshot.syncedOwnedIds.UnionWith(ownedIds);
+		}
+
+		public override void SendClientChanges(ModPlayer clientPlayer)
+		{
+			var prev = (AugmentPlayer)clientPlayer;
+			if (ownedIds.SetEquals(prev.syncedOwnedIds))
+				return;
+
+			SendSyncOwnedAugments();
+		}
+
+		// Writes a SyncOwnedAugments packet from the local client to the server.
+		internal void SendSyncOwnedAugments()
+		{
+			if (Main.netMode != NetmodeID.MultiplayerClient)
+				return;
+
+			ModPacket packet = ModContent.GetInstance<Augments>().GetPacket();
+			packet.Write((byte)AugmentPacketType.SyncOwnedAugments);
+			packet.Write((byte)Player.whoAmI);
+			packet.Write(ownedIds.Count);
+			foreach (string id in ownedIds)
+				packet.Write(id);
+			packet.Send();
+		}
+
+		// Applied on the server and on remote clients when a SyncOwnedAugments packet
+		// arrives. Rebuilds ownedIds + owned WITHOUT touching cooldown/timer fields,
+		// since those are synced separately via WriteAugmentState.
+		public void ApplySyncedOwnedIds(IEnumerable<string> ids)
+		{
+			ownedIds.Clear();
+			foreach (string id in ids)
+			{
+				if (ownedIds.Count >= MaxOwnedAugments)
+					break;
+				if (AugmentDatabase.GetById(id) != null)
+					ownedIds.Add(id);
+			}
+			owned.Clear();
+			foreach (string id in ownedIds)
+			{
+				Augment augment = AugmentDatabase.GetById(id);
+				if (augment != null)
+					owned.Add(augment);
+			}
+		}
+
 		public override void Initialize()
 		{
 			ownedIds.Clear();
@@ -871,11 +1087,18 @@ namespace Augments
 			owned.Clear();
 			BossAugmentKills = new Dictionary<int, int>();
 			DamagedBossesThisFight = new HashSet<int>();
+			TrophyHunterKilledTypes = new HashSet<int>();
+			LuckyFindCopperGained = 0;
 		}
 
 		public override void OnEnterWorld()
 		{
 			DamagedBossesThisFight.Clear();
+			// Push our disk-loaded owned list to the server FIRST so it has the
+			// correct state before it replies to RequestAugmentSync. Packets on the
+			// same connection are processed in order, so this arrives before the
+			// request is handled.
+			SendSyncOwnedAugments();
 			AugmentNet.SendRequestAugmentSync();
 		}
 
@@ -887,7 +1110,6 @@ namespace Augments
 
 		public void WriteAugmentState(BinaryWriter writer)
 		{
-			DebugCheckState("WriteAugmentState");
 			writer.Write((ushort)ownedIds.Count);
 			foreach (string id in ownedIds)
 				writer.Write(id);
@@ -903,6 +1125,14 @@ namespace Augments
 			writer.Write((ushort)lockedKeystoneFamilies.Count);
 			foreach (string family in lockedKeystoneFamilies)
 				writer.Write(family);
+
+			writer.Write(RevitalizingWaveTimer);
+			writer.Write(CleanseCooldown);
+			writer.Write(LastRitesCooldown);
+			writer.Write(lastRitesInvulnTicks);
+			writer.Write(LifelineCooldown);
+			writer.Write(lifelineInvulnTicks);
+			writer.Write(lifelineProtectionAuthorized);
 		}
 
 		public void ReadAugmentState(BinaryReader reader)
@@ -927,15 +1157,21 @@ namespace Augments
 			for (int i = 0; i < lockedFamilyCount; i++)
 				lockedKeystoneFamilies.Add(reader.ReadString());
 
+			RevitalizingWaveTimer = reader.ReadInt32();
+			CleanseCooldown = reader.ReadInt32();
+			LastRitesCooldown = reader.ReadInt32();
+			lastRitesInvulnTicks = reader.ReadInt32();
+			LifelineCooldown = reader.ReadInt32();
+			lifelineInvulnTicks = reader.ReadInt32();
+			lifelineProtectionAuthorized = reader.ReadBoolean();
+
 			RebuildOwnedCacheFromOwnedIdsOnly();
-			DebugCheckState("ReadAugmentState");
 		}
 
 		// --- Persistence: augments survive between play sessions ---
 
 		public override void SaveData(TagCompound tag)
 		{
-			DebugCheckState("SaveData");
 			var customData = new TagCompound();
 			foreach (var a in owned)
 			{
@@ -949,6 +1185,15 @@ namespace Augments
 			tag["everOwnedIds"] = new List<string>(everOwnedIds);
 			tag["soldAugmentIds"] = new List<string>(soldAugmentIds);
 			tag["lockedKeystoneFamilies"] = new List<string>(lockedKeystoneFamilies);
+			tag["revitalizingWaveTimer"] = RevitalizingWaveTimer;
+			tag["cleanseCooldown"] = CleanseCooldown;
+			tag["lastRitesCooldown"] = LastRitesCooldown;
+			tag["lastRitesInvulnTicks"] = lastRitesInvulnTicks;
+			tag["lifelineCooldown"] = LifelineCooldown;
+			tag["lifelineInvulnTicks"] = lifelineInvulnTicks;
+
+			tag["trophyHunterKilledTypes"] = new List<int>(TrophyHunterKilledTypes);
+			tag["luckyFindCopperGained"] = LuckyFindCopperGained;
 
 			// TagCompound requires string keys — store NPC type as string.
 			var bossKills = new TagCompound();
@@ -996,6 +1241,13 @@ namespace Augments
 			if (tag.ContainsKey("lockedKeystoneFamilies"))
 				lockedKeystoneFamilies.UnionWith(tag.GetList<string>("lockedKeystoneFamilies"));
 
+			RevitalizingWaveTimer = tag.ContainsKey("revitalizingWaveTimer") ? tag.GetInt("revitalizingWaveTimer") : 1200;
+			CleanseCooldown = tag.ContainsKey("cleanseCooldown") ? tag.GetInt("cleanseCooldown") : 0;
+			LastRitesCooldown = tag.ContainsKey("lastRitesCooldown") ? tag.GetInt("lastRitesCooldown") : 0;
+			lastRitesInvulnTicks = tag.ContainsKey("lastRitesInvulnTicks") ? tag.GetInt("lastRitesInvulnTicks") : 0;
+			LifelineCooldown = tag.ContainsKey("lifelineCooldown") ? tag.GetInt("lifelineCooldown") : 0;
+			lifelineInvulnTicks = tag.ContainsKey("lifelineInvulnTicks") ? tag.GetInt("lifelineInvulnTicks") : 0;
+
 			RebuildOwnedCacheFromOwnedIdsOnly();
 
 			if (tag.GetCompound("augmentCustomData") is TagCompound customData)
@@ -1004,6 +1256,29 @@ namespace Augments
 				{
 					if (customData.GetCompound(a.Id) is TagCompound augmentTag)
 						a.LoadCustomData(augmentTag);
+				}
+			}
+
+			TrophyHunterKilledTypes.Clear();
+			if (tag.ContainsKey("trophyHunterKilledTypes"))
+				TrophyHunterKilledTypes.UnionWith(tag.GetList<int>("trophyHunterKilledTypes"));
+			LuckyFindCopperGained = tag.ContainsKey("luckyFindCopperGained") ? tag.GetInt("luckyFindCopperGained") : 0;
+
+			// Migration: old saves stored these inside augment custom data.
+			if (tag.ContainsKey("augmentCustomData"))
+			{
+				var legacy = tag.GetCompound("augmentCustomData");
+				if (TrophyHunterKilledTypes.Count == 0 && legacy.ContainsKey("trophy_hunter"))
+				{
+					var t = legacy.GetCompound("trophy_hunter");
+					if (t.ContainsKey("killedTypes"))
+						TrophyHunterKilledTypes.UnionWith(t.GetList<int>("killedTypes"));
+				}
+				if (LuckyFindCopperGained == 0 && legacy.ContainsKey("lucky_find"))
+				{
+					var t = legacy.GetCompound("lucky_find");
+					if (t.ContainsKey("copperGained"))
+						LuckyFindCopperGained = t.GetInt("copperGained");
 				}
 			}
 
@@ -1027,7 +1302,6 @@ namespace Augments
 					lockedKeystoneFamilies.Add(a.KeystoneFamily);
 			}
 
-			DebugCheckState("LoadData");
 		}
 	}
 }

@@ -1,7 +1,6 @@
 using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
-using Terraria.ModLoader.IO;
 
 namespace Augments
 {
@@ -11,7 +10,7 @@ namespace Augments
         public override string DisplayName => "Lucky Find";
         public override string Description =>
             "Defeated enemies have a 25% chance to drop a small bonus of extra coins. Scales with Fortune.\n" +
-            $"Total extra coins gained: {FormatCoins(copperGained)}.";
+            $"Total extra coins gained: {FormatCoins(Main.LocalPlayer?.GetModPlayer<AugmentPlayer>()?.LuckyFindCopperGained ?? 0)}.";
 
         public override AugmentRarity Rarity => AugmentRarity.Common;
         public override AugmentClass Class => AugmentClass.Universal;
@@ -22,15 +21,9 @@ namespace Augments
         private const int MinCoins = 1;
         private const int MaxCoins = 3;
 
-        // Coin values in copper, vanilla style: 100 copper = 1 silver,
-        // 100 silver = 1 gold, 100 gold = 1 platinum.
-        private const int CopperPerSilver = 100;
+        internal const int CopperPerSilver = 100;
         private const int CopperPerGold = CopperPerSilver * 100;
         private const int CopperPerPlatinum = CopperPerGold * 100;
-
-        // Tracked in copper so it can roll up cleanly into silver/gold/platinum
-        // as it grows, instead of just being a raw count of dropped coin items.
-        private int copperGained;
 
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
@@ -55,18 +48,7 @@ namespace Augments
             Main.item[index].GetGlobalItem<AugmentBonusCoinItem>().IsLuckyFindBonus = true;
         }
 
-        // Called by AugmentBonusCoinItem once the dropped coin is actually
-        // picked up - the running total should reflect coins in hand, not
-        // coins that are merely on the ground.
-        public void CreditCoins(int silverCoinCount)
-        {
-            copperGained += silverCoinCount * CopperPerSilver;
-        }
-
-        // Shows only the highest denomination plus the one below it (e.g.
-        // "2 Gold 30 Silver"), and never shows Copper once there's any Silver
-        // or Gold - matching how vanilla's own coin totals read at a glance.
-        private static string FormatCoins(int copper)
+        internal static string FormatCoins(int copper)
         {
             int platinum = copper / CopperPerPlatinum;
             int gold = copper % CopperPerPlatinum / CopperPerGold;
@@ -80,16 +62,6 @@ namespace Augments
                 return $"{silver} Silver";
 
             return $"{copper} Copper";
-        }
-
-        public override void SaveCustomData(TagCompound tag)
-        {
-            tag["copperGained"] = copperGained;
-        }
-
-        public override void LoadCustomData(TagCompound tag)
-        {
-            copperGained = tag.GetInt("copperGained");
         }
     }
 }

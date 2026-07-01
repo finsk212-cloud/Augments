@@ -19,13 +19,13 @@ namespace Augments
 
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
-            if (hit.Crit && item.DamageType == DamageClass.Melee)
+            if (hit.Crit && item.CountsAsClass(DamageClass.Melee))
                 PushNearbyTargets(player, target);
         }
 
         public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
         {
-            if (hit.Crit && proj.DamageType == DamageClass.Melee)
+            if (hit.Crit && proj.CountsAsClass(DamageClass.Melee))
                 PushNearbyTargets(player, target);
         }
 
@@ -44,8 +44,9 @@ namespace Augments
                     continue;
 
                 direction.Normalize();
-                npc.velocity = direction * KnockbackStrength * npc.knockBackResist;
-                npc.netUpdate = true;
+                // SimpleStrikeNPC handles netUpdate internally and is multiplayer-safe.
+                // noHitEffect=true suppresses the 0-damage combat text.
+                npc.SimpleStrikeNPC(0, direction.X >= 0f ? 1 : -1, false, KnockbackStrength, DamageClass.Melee, true);
             }
         }
     }

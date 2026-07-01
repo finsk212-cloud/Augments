@@ -15,12 +15,10 @@ namespace Augments
         public override bool HasAuraEffect => true;
         // NPC targeting is redirected in AugmentGlobalNPC.PreAI (800px radius).
 
-        private int visualTimer;
-
         public override void OnUpdate(Player player)
         {
-            if (++visualTimer < 12) return;
-            visualTimer = 0;
+            if ((Main.GameUpdateCount + (ulong)player.whoAmI) % 12 != 0)
+                return;
 
             for (int i = 0; i < 2; i++)
             {

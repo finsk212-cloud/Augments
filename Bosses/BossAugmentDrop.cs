@@ -20,15 +20,7 @@ namespace Augments
 			RarityBracket bracket = BossTierMap.GetBracket(npc.type);
 			if (!BossTierMap.Brackets.ContainsKey(npc.type))
 			{
-				// Modded boss not in BossTierMap - assign bracket from vanilla world progression.
-				if (!Main.hardMode)
-					bracket = RarityBracket.PreHardmode;
-				else if (!NPC.downedMechBossAny)
-					bracket = RarityBracket.HardmodePrePlantera;
-				else if (!NPC.downedPlantBoss)
-					bracket = RarityBracket.PlanteraPlus;
-				else
-					bracket = RarityBracket.Endgame;
+				bracket = GetModdedBossBracket(npc);
 			}
 
 			foreach (Player player in Main.player)
@@ -72,6 +64,35 @@ namespace Augments
 				if (!player.active) continue;
 				player.GetModPlayer<AugmentPlayer>().DamagedBossesThisFight.Remove(bossKey);
 			}
+		}
+
+		private static RarityBracket GetModdedBossBracket(NPC npc)
+		{
+			if (npc.ModNPC?.Mod?.Name == "CalamityMod")
+			{
+				switch (npc.ModNPC.Name)
+				{
+					case "SupremeCalamitas":
+					case "AresBody":
+					case "ThanatosHead":
+					case "Apollo":
+					case "Artemis":
+						return RarityBracket.FinalCalamity;
+					case "DevourerofGodsHead":
+					case "Yharon":
+						return RarityBracket.LatePostMoonLord;
+				}
+			}
+
+			if (!Main.hardMode)
+				return RarityBracket.PreHardmode;
+			if (!NPC.downedMechBossAny)
+				return RarityBracket.EarlyHardmode;
+			if (!NPC.downedPlantBoss)
+				return RarityBracket.PostMechs;
+			if (!NPC.downedMoonlord)
+				return RarityBracket.PostPlantera;
+			return RarityBracket.EarlyPostMoonLord;
 		}
 	}
 }

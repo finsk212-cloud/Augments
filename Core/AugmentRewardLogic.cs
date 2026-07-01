@@ -1,6 +1,9 @@
 using System.Collections.Generic;
+using Microsoft.Xna.Framework;
 using Terraria;
+using Terraria.Chat;
 using Terraria.ID;
+using Terraria.Localization;
 using Terraria.ModLoader;
 
 namespace Augments
@@ -11,10 +14,8 @@ namespace Augments
 		// present a whole Keystone family instead of 3 normal picks.
 		private const float KeystoneFamilyChance = 0.15f;
 
-		// Rolls a rarity for the given bracket and pops the choice panel for
-		// `player`. If the rolled rarity has nothing left to offer, steps
-		// down one tier at a time until something is found (or Common also
-		// comes up empty).
+		// Rolls a rarity for the bracket, then tries that tier, lower tiers,
+		// and finally higher tiers until an eligible choice pool is found.
 		public static void GrantReward(Player player, RarityBracket bracket)
 		{
 			AugmentRarity rolledRarity = BossRarityRoller.Roll(bracket);
@@ -27,18 +28,32 @@ namespace Augments
 				return;
 			}
 
-			AugmentRarity actualRarity = rolledRarity;
-			var choices = augmentPlayer.RollChoices(3, actualRarity);
-			while (choices.Count == 0 && actualRarity > AugmentRarity.Common)
+			foreach (AugmentRarity rarity in GetRarityFallbackOrder(rolledRarity))
 			{
-				actualRarity--;
-				choices = augmentPlayer.RollChoices(3, actualRarity);
+				List<Augment> choices = augmentPlayer.RollChoices(3, rarity);
+				if (choices.Count == 0)
+					continue;
+
+				ShowRewardChoices(player, choices, rarity);
+				return;
 			}
 
-			if (choices.Count > 0)
-				ShowRewardChoices(player, choices, actualRarity);
+			const string message = "No augments left to offer.";
+			if (Main.netMode == NetmodeID.Server)
+				ChatHelper.SendChatMessageToClient(NetworkText.FromLiteral(message), new Color(255, 100, 100), player.whoAmI);
 			else
-				Main.NewText("No augments left to offer!", 255, 100, 100);
+				Main.NewText(message, 255, 100, 100);
+		}
+
+		private static IEnumerable<AugmentRarity> GetRarityFallbackOrder(AugmentRarity rolledRarity)
+		{
+			yield return rolledRarity;
+
+			for (int rarity = (int)rolledRarity - 1; rarity >= (int)AugmentRarity.Common; rarity--)
+				yield return (AugmentRarity)rarity;
+
+			for (int rarity = (int)rolledRarity + 1; rarity <= (int)AugmentRarity.Legendary; rarity++)
+				yield return (AugmentRarity)rarity;
 		}
 
 		private static void ShowRewardChoices(Player player, List<Augment> choices, AugmentRarity rarity)

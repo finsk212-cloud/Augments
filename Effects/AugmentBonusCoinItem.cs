@@ -15,9 +15,12 @@ namespace Augments
 
 		public override bool OnPickup(Item item, Player player)
 		{
-			if (IsLuckyFindBonus && AugmentDatabase.GetById("lucky_find") is LuckyFindAugment luckyFind)
-				luckyFind.CreditCoins(item.stack);
-
+			if (IsLuckyFindBonus)
+			{
+				var ap = player.GetModPlayer<AugmentPlayer>();
+				if (ap.HasAugment("lucky_find"))
+					ap.LuckyFindCopperGained += item.stack * LuckyFindAugment.CopperPerSilver;
+			}
 			return true;
 		}
 	}

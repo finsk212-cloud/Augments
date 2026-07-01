@@ -1,4 +1,4 @@
-using Terraria;
+﻿using Terraria;
 using Terraria.ModLoader;
 
 namespace Augments
@@ -18,13 +18,13 @@ namespace Augments
 
         public override void ModifyHitNPCWithItem(Player player, Item item, NPC target, ref NPC.HitModifiers modifiers)
         {
-            if (item.DamageType == DamageClass.Melee && player.statLife < player.statLifeMax2 * TriggerThreshold)
+            if (item.CountsAsClass(DamageClass.Melee) && player.statLife < player.statLifeMax2 * TriggerThreshold)
                 modifiers.FlatBonusDamage += (int)(item.damage * BonusDamagePercent);
         }
 
         public override void ModifyHitNPCWithProj(Player player, Projectile proj, NPC target, ref NPC.HitModifiers modifiers)
         {
-            if (proj.DamageType == DamageClass.Melee && player.statLife < player.statLifeMax2 * TriggerThreshold)
+            if (proj.CountsAsClass(DamageClass.Melee) && player.statLife < player.statLifeMax2 * TriggerThreshold)
                 modifiers.FlatBonusDamage += (int)(proj.damage * BonusDamagePercent);
         }
     }

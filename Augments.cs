@@ -7,11 +7,14 @@ namespace Augments
 {
 	internal enum AugmentPacketType : byte
 	{
-		SoulLinkHeal,
-		RevitalizingWaveHeal,
-		CleanseTrigger,           // client → server: relay CleanseApply to target
-		CleanseApply,             // server → target client: clear own debuffs
+		SoulLinkRequest,
+		RevitalizingWaveVisual,
+		CleanseRequest,
 		BossDamageParticipation,  // client → server: "I damaged boss type X this fight"
+		SupportHealVisual,
+		LifelineTrigger,
+		UndyingBondRequest,
+		UndyingBondRedirect,
 		OpenRewardChoices,
 		ChooseReward,
 		SyncAugmentState,
@@ -20,7 +23,8 @@ namespace Augments
 		DebugCommandRequest,
 		VendorSellRequest,
 		VendorBuyBackRequest,
-		RequestVendorSpawn
+		RequestVendorSpawn,
+		SyncOwnedAugments  // client → server → all: list of owned augment IDs
 	}
 
 	internal enum DebugAugmentCommandType : byte
@@ -76,34 +80,32 @@ namespace Augments
 
 			switch (type)
 			{
-				case AugmentPacketType.SoulLinkHeal:
-					byte slTarget = reader.ReadByte();
-					int healAmount = reader.ReadInt32();
-					// Player.Heal() calls NetMessage.SendData(MessageID.PlayerHp) internally
-					// when running on the server, syncing the HP change to all clients.
-					Main.player[slTarget].Heal(healAmount);
+				case AugmentPacketType.SoulLinkRequest:
+					SupportEffects.HandleSoulLinkRequest(whoAmI, reader.ReadInt32());
 					break;
 
-				case AugmentPacketType.RevitalizingWaveHeal:
-					byte rwTarget = reader.ReadByte();
-					int rwHeal = reader.ReadInt32();
-					Main.player[rwTarget].Heal(rwHeal);
+				case AugmentPacketType.RevitalizingWaveVisual:
+					SupportEffects.HandleRevitalizingWaveVisual(reader.ReadByte());
 					break;
 
-				case AugmentPacketType.CleanseTrigger:
-					// Server receives: relay CleanseApply to the target client.
-					if (Main.netMode == NetmodeID.Server)
-					{
-						byte targetIdx = reader.ReadByte();
-						ModPacket relay = GetPacket();
-						relay.Write((byte)AugmentPacketType.CleanseApply);
-						relay.Send(toClient: targetIdx);
-					}
+				case AugmentPacketType.CleanseRequest:
+					SupportEffects.HandleCleanseRequest(whoAmI);
 					break;
 
-				case AugmentPacketType.CleanseApply:
-					// Target client receives: clear own debuffs.
-					CleanseAugment.ClearDebuffs(Main.LocalPlayer);
+				case AugmentPacketType.SupportHealVisual:
+					SupportEffects.HandleHealVisual(reader.ReadByte(), reader.ReadInt32());
+					break;
+
+				case AugmentPacketType.LifelineTrigger:
+					SupportEffects.HandleLifelineRequest(whoAmI);
+					break;
+
+				case AugmentPacketType.UndyingBondRequest:
+					SupportEffects.HandleUndyingBondRequest(whoAmI);
+					break;
+
+				case AugmentPacketType.UndyingBondRedirect:
+					SupportEffects.HandleUndyingBondRedirect(reader.ReadInt32(), reader.ReadInt32());
 					break;
 
 				case AugmentPacketType.BossDamageParticipation:
@@ -116,6 +118,35 @@ namespace Augments
 							p.GetModPlayer<AugmentPlayer>().DamagedBossesThisFight.Add(bossNpcType);
 					}
 					break;
+
+				case AugmentPacketType.SyncOwnedAugments:
+				{
+					byte playerIndex = reader.ReadByte();
+					int count = reader.ReadInt32();
+					var ids = new System.Collections.Generic.List<string>(count);
+					for (int i = 0; i < count; i++)
+						ids.Add(reader.ReadString());
+
+					if (playerIndex >= 0 && playerIndex < Main.maxPlayers)
+					{
+						Player target = Main.player[playerIndex];
+						if (target.active)
+							target.GetModPlayer<AugmentPlayer>().ApplySyncedOwnedIds(ids);
+					}
+
+					// Server relays to all other clients so they can see this player's augments.
+					if (Main.netMode == NetmodeID.Server)
+					{
+						ModPacket relay = ModContent.GetInstance<Augments>().GetPacket();
+						relay.Write((byte)AugmentPacketType.SyncOwnedAugments);
+						relay.Write(playerIndex);
+						relay.Write(count);
+						foreach (string id in ids)
+							relay.Write(id);
+						relay.Send(-1, whoAmI); // all except original sender
+					}
+					break;
+				}
 			}
 		}
 	}

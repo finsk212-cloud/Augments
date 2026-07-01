@@ -48,22 +48,20 @@ namespace Augments
 		private static void DrawCircle(SpriteBatch spriteBatch, Vector2 worldCenter, float thickness, Color color)
 		{
 			float uiScale = Main.UIScale;
+			// Convert center to screen space; scale radius by zoom so the circle
+			// tracks the actual 600-world-pixel boundary regardless of zoom level.
+			Vector2 screenCenter = (worldCenter - Main.screenPosition) / uiScale;
+			float screenRadius = AuraRadius / Main.GameZoomTarget / uiScale;
 
 			for (int s = 0; s < CircleSteps; s++)
 			{
 				float a1 = s / (float)CircleSteps * MathHelper.TwoPi;
 				float a2 = (s + 1) / (float)CircleSteps * MathHelper.TwoPi;
 
-				Vector2 p1 = worldCenter + new Vector2((float)Math.Cos(a1), (float)Math.Sin(a1)) * AuraRadius;
-				Vector2 p2 = worldCenter + new Vector2((float)Math.Cos(a2), (float)Math.Sin(a2)) * AuraRadius;
+				Vector2 p1 = screenCenter + new Vector2((float)Math.Cos(a1), (float)Math.Sin(a1)) * screenRadius;
+				Vector2 p2 = screenCenter + new Vector2((float)Math.Cos(a2), (float)Math.Sin(a2)) * screenRadius;
 
-				DrawSegment(
-					spriteBatch,
-					(p1 - Main.screenPosition) / uiScale,
-					(p2 - Main.screenPosition) / uiScale,
-					color,
-					thickness
-				);
+				DrawSegment(spriteBatch, p1, p2, color, thickness);
 			}
 		}
 

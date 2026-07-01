@@ -1,4 +1,4 @@
-using Terraria;
+﻿using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
 
@@ -57,13 +57,13 @@ namespace Augments
 
 		public override void ModifyHitNPCWithItem(Player player, Item item, NPC target, ref NPC.HitModifiers modifiers)
 		{
-			if (item.DamageType == DamageClass.Melee)
+			if (item.CountsAsClass(DamageClass.Melee))
 				TryTriggerDashImpact(item.damage, ref modifiers);
 		}
 
 		public override void ModifyHitNPCWithProj(Player player, Projectile proj, NPC target, ref NPC.HitModifiers modifiers)
 		{
-			if (proj.DamageType == DamageClass.Melee)
+			if (proj.CountsAsClass(DamageClass.Melee))
 				TryTriggerDashImpact(proj.damage, ref modifiers);
 		}
 
