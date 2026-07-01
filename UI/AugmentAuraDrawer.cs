@@ -6,39 +6,49 @@ using Terraria.GameContent;
 
 namespace Augments
 {
-	// Draws a faint green ring at the 600px aura radius around every active
-	// Support-stance player who owns at least one aura augment. Uses
-	// InterfaceScaleType.Game so the spriteBatch matrix is Main.GameViewMatrix
-	// (the actual camera transform) - world coordinates are passed directly,
-	// no manual screenPosition subtraction needed.
+	// Draws a soft glowing ring at the 600px aura radius around the local player
+	// when they are in Support stance and own at least one aura augment.
+	// Three passes (outer bloom → mid halo → bright core) with a slow sine pulse
+	// give a neon-ring look without being distracting.
 	public static class AugmentAuraDrawer
 	{
 		private const float AuraRadius = 600f;
 		private const int CircleSteps = 64;
-		private const float LineThickness = 2f;
-		private static readonly Color CircleColor = new Color(100, 220, 140) * 0.22f;
 
 		public static void DrawAuras(SpriteBatch spriteBatch)
 		{
-			for (int i = 0; i < Main.maxPlayers; i++)
+			var ap = Main.LocalPlayer.GetModPlayer<AugmentPlayer>();
+			// Aura circle requires 2+ Support augments (stance level).
+			// Effects still work from 1 augment, but the visual only unlocks at 2.
+			if (ap.SupportAugmentCount < 2)
+				return;
+			bool hasAny = false;
+			foreach (var a in ap.Owned)
 			{
-				Player player = Main.player[i];
-				if (!player.active || player.dead)
-					continue;
-
-				var ap = player.GetModPlayer<AugmentPlayer>();
-				if (ap.SupportAugmentCount < 2)
-					continue;
-
-				if (!ap.HasAugment("warcry") && !ap.HasAugment("ironclad_aura"))
-					continue;
-
-				DrawCircle(spriteBatch, player.Center);
+				if (a.HasAuraEffect) { hasAny = true; break; }
 			}
+			if (!hasAny)
+				return;
+
+			// Slow breathing pulse — full cycle ≈ 3 seconds, range 0→1→0.
+			float pulse = (float)Math.Sin(Main.GlobalTimeWrappedHourly * 2.0) * 0.5f + 0.5f;
+
+			Vector2 center = Main.LocalPlayer.Center;
+
+			// Layer 1: super-wide outer scatter, almost invisible — gives glow spread
+			DrawCircle(spriteBatch, center, 22f, new Color(60, 180, 100)  * (0.018f + pulse * 0.010f));
+			// Layer 2: wide bloom
+			DrawCircle(spriteBatch, center, 10f, new Color(100, 220, 140) * (0.030f + pulse * 0.015f));
+			// Layer 3: mid halo
+			DrawCircle(spriteBatch, center,  4f, new Color(140, 235, 165) * (0.070f + pulse * 0.030f));
+			// Layer 4: faint core — reduced from before so the ring reads as glow, not solid line
+			DrawCircle(spriteBatch, center, 1.5f, new Color(210, 255, 225) * (0.22f + pulse * 0.08f));
 		}
 
-		private static void DrawCircle(SpriteBatch spriteBatch, Vector2 worldCenter)
+		private static void DrawCircle(SpriteBatch spriteBatch, Vector2 worldCenter, float thickness, Color color)
 		{
+			float uiScale = Main.UIScale;
+
 			for (int s = 0; s < CircleSteps; s++)
 			{
 				float a1 = s / (float)CircleSteps * MathHelper.TwoPi;
@@ -47,11 +57,17 @@ namespace Augments
 				Vector2 p1 = worldCenter + new Vector2((float)Math.Cos(a1), (float)Math.Sin(a1)) * AuraRadius;
 				Vector2 p2 = worldCenter + new Vector2((float)Math.Cos(a2), (float)Math.Sin(a2)) * AuraRadius;
 
-				DrawSegment(spriteBatch, p1, p2);
+				DrawSegment(
+					spriteBatch,
+					(p1 - Main.screenPosition) / uiScale,
+					(p2 - Main.screenPosition) / uiScale,
+					color,
+					thickness
+				);
 			}
 		}
 
-		private static void DrawSegment(SpriteBatch spriteBatch, Vector2 start, Vector2 end)
+		private static void DrawSegment(SpriteBatch spriteBatch, Vector2 start, Vector2 end, Color color, float thickness)
 		{
 			Vector2 delta = end - start;
 			float len = delta.Length();
@@ -62,11 +78,11 @@ namespace Augments
 			spriteBatch.Draw(
 				TextureAssets.MagicPixel.Value,
 				start,
-				null,
-				CircleColor,
+				new Rectangle(0, 0, 1, 1),
+				color,
 				angle,
-				new Vector2(0f, 0.5f), // pivot at left-center so rotation is correct
-				new Vector2(len, LineThickness),
+				new Vector2(0f, 0.5f),
+				new Vector2(len, thickness),
 				SpriteEffects.None,
 				0f
 			);

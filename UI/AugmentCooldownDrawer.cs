@@ -97,6 +97,24 @@ namespace Augments
                     null));
             }
 
+            if (augmentPlayer.ReceivedSwiftnessAura)
+            {
+                icons.Add(new StatusIcon(
+                    "+15%",
+                    AugmentTextColors.MovementSpeed,
+                    "Swiftness Aura: +15% movement speed from nearby ally",
+                    null));
+            }
+
+            if (augmentPlayer.ReceivedManaWell)
+            {
+                icons.Add(new StatusIcon(
+                    "+30%",
+                    AugmentTextColors.Mana,
+                    "Mana Well: 30% faster mana regen from nearby ally",
+                    null));
+            }
+
             if (icons.Count == 0)
                 return;
 

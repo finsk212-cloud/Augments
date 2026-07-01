@@ -9,6 +9,7 @@ namespace Augments
 
 		public override AugmentRarity Rarity => AugmentRarity.Common;
 		public override AugmentClass Class => AugmentClass.Support;
+		public override bool HasAuraEffect => true;
 
 		// No hooks - the aura is pull-based. Each nearby player checks for this
 		// augment in AugmentPlayer.PostUpdate and applies the buff to themselves.

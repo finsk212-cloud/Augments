@@ -44,6 +44,13 @@ namespace Augments
 			list.SetScrollbar(scrollbar);
 			backPanel.Append(scrollbar);
 
+			// Centered in the 55px gap below the list (list ends at 420-55=365px).
+			var supportTag = new SupportClassTagElement();
+			supportTag.Width.Set(0f, 1f);
+			supportTag.Height.Set(30f, 0f);
+			supportTag.Top.Set(377f, 0f);
+			backPanel.Append(supportTag);
+
 			Append(backPanel);
 		}
 

@@ -62,6 +62,10 @@ namespace Augments
 		// still be granted directly via the /augment command.
 		public virtual bool IsDebugOnly => false;
 
+		// True for augments whose effect operates on a proximity radius around the
+		// owner — used by AugmentAuraDrawer to decide whether to show the aura circle.
+		public virtual bool HasAuraEffect => false;
+
 		// Additive contribution to the player's TotalFortune (see
 		// AugmentPlayer.TotalFortune), summed live across every owned augment -
 		// not separately saved. Scales every Fortune-aware chance check

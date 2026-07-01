@@ -16,6 +16,7 @@ namespace Augments
         public const string ImmobilizeHex = "CC99FF";    // debuff names that reduce enemy mobility (Slow, and any future similar effects)
         public const string FrostburnHex = "66FFE0";      // the Frostburn debuff name specifically
         public const string MovementSpeedHex = "CCFF66"; // movement speed percentage text
+        public const string SupportClassHex = "8CE6A0"; // Support class references in descriptions
 
         public static readonly Color Trigger = new Color(255, 166, 77);
         public static readonly Color Healing = new Color(102, 255, 102);
@@ -29,5 +30,6 @@ namespace Augments
         public static readonly Color Immobilize = new Color(204, 153, 255);
         public static readonly Color Frostburn = new Color(102, 255, 224);
         public static readonly Color MovementSpeed = new Color(204, 255, 102);
+        public static readonly Color SupportClass = new Color(140, 230, 160);
     }
 }

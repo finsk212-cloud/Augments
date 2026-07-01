@@ -74,6 +74,20 @@ namespace Augments
 		// to show the status icon. Reset to false at the top of each UpdateEquips.
 		public bool ReceivedIroncladAura;
 
+		// Per-frame tracking for other pull-based aura effects.
+		// Reset and re-evaluated each frame; used to prevent double-application
+		// when two Support players both own the same aura augment.
+		public bool ReceivedSwiftnessAura;
+		public bool ReceivedManaWell;
+		public bool ReceivedCombatMedic;
+
+		// Per-player cooldowns for triggered Support auras (Last Rites, Lifeline).
+		// Volatile — not saved to disk. 90s = 5400 ticks at 60 ticks/sec.
+		public int LastRitesCooldown;
+		private int lastRitesInvulnTicks;
+		public int LifelineCooldown;
+		private int lifelineInvulnTicks;
+
 		// Picks up to `count` random augments of the given rarity that the
 		// player doesn't already own, no repeats. With any TotalFortune,
 		// each slot independently gets a 15% chance to specifically try for
@@ -133,6 +147,11 @@ namespace Augments
 			foreach (var a in Owned)
 				a.OnUpdate(Player);
 
+			// Keep the Support Class buff active while any Support augment is owned.
+			// Short duration refreshed every tick — expires within 3 frames if removed.
+			if (SupportAugmentCount >= 1)
+				Player.AddBuff(ModContent.BuffType<SupportClassBuff>(), 3);
+
 			// Pull-based Warcry aura: each player checks nearby Support players
 			// for the "warcry" augment and self-applies the buff. This is
 			// multiplayer-safe because every client only modifies their own player.
@@ -144,7 +163,7 @@ namespace Augments
 				if (Vector2.Distance(Player.Center, other.Center) > AuraRadius)
 					continue;
 				var otherAP = other.GetModPlayer<AugmentPlayer>();
-				if (otherAP.SupportAugmentCount < 2 || !otherAP.HasAugment("warcry"))
+				if (!otherAP.HasAugment("warcry"))
 					continue;
 				// 10-tick duration = refreshed each tick while in range, falls off
 				// within 10 ticks (~0.17s) of the Support player leaving range.
@@ -154,19 +173,93 @@ namespace Augments
 
 			// Owner also benefits from their own Warcry - the pull loop skips
 			// self, so this handles the Support player's own application.
-			if (SupportAugmentCount >= 2 && HasAugment("warcry"))
+			if (HasAugment("warcry"))
 				Player.AddBuff(ModContent.BuffType<WarCryBuff>(), 10);
+
+			// Tick down triggered-aura cooldowns and re-assert invulnerability
+			// each frame while it's active. Re-assertion is required because vanilla
+			// overwrites player.immuneTime with its own short post-hit window every
+			// tick — a one-shot set doesn't survive. See PhoenixHeartAugment for detail.
+			if (LastRitesCooldown > 0) LastRitesCooldown--;
+			if (lastRitesInvulnTicks > 0)
+			{
+				Player.immune = true;
+				Player.immuneTime = lastRitesInvulnTicks;
+				lastRitesInvulnTicks--;
+			}
+
+			if (LifelineCooldown > 0) LifelineCooldown--;
+			if (lifelineInvulnTicks > 0)
+			{
+				Player.immune = true;
+				Player.immuneTime = lifelineInvulnTicks;
+				lifelineInvulnTicks--;
+			}
+
+			// Last Rites pull check: fires on the local player's own client when
+			// they drop below 20% HP and no cooldown is active. Finds a nearby
+			// Support player with the augment and grants 3s invulnerability.
+			if (Player.statLife <= (int)(Player.statLifeMax2 * 0.20f) && LastRitesCooldown == 0)
+			{
+				for (int i = 0; i < Main.maxPlayers; i++)
+				{
+					Player other = Main.player[i];
+					if (!other.active || other.dead || other == Player)
+						continue;
+					if (Vector2.Distance(Player.Center, other.Center) > AuraRadius)
+						continue;
+					var otherAP = other.GetModPlayer<AugmentPlayer>();
+					if (!otherAP.HasAugment("last_rites"))
+						continue;
+					LastRitesCooldown = 5400;
+					lastRitesInvulnTicks = 180;
+					Player.AddBuff(ModContent.BuffType<LastRitesCooldownBuff>(), 5400);
+					break;
+				}
+			}
 		}
 
 		public override void PostUpdateRunSpeeds()
 		{
+			ReceivedSwiftnessAura = false;
+
 			foreach (var a in Owned)
 				a.PostUpdateRunSpeeds(Player);
+
+			// Pull-based Swiftness Aura: each player checks nearby Support players
+			// for the "swiftness_aura" augment and self-applies the movement boost.
+			for (int i = 0; i < Main.maxPlayers; i++)
+			{
+				Player other = Main.player[i];
+				if (!other.active || other.dead || other == Player)
+					continue;
+				if (Vector2.Distance(Player.Center, other.Center) > AuraRadius)
+					continue;
+				var otherAP = other.GetModPlayer<AugmentPlayer>();
+				if (!otherAP.HasAugment("swiftness_aura"))
+					continue;
+				Player.maxRunSpeed *= 1.15f;
+				Player.accRunSpeed *= 1.15f;
+				Player.runAcceleration *= 1.15f;
+				ReceivedSwiftnessAura = true;
+				break;
+			}
+
+			// Owner also benefits from their own Swiftness Aura.
+			if (!ReceivedSwiftnessAura && HasAugment("swiftness_aura"))
+			{
+				Player.maxRunSpeed *= 1.15f;
+				Player.accRunSpeed *= 1.15f;
+				Player.runAcceleration *= 1.15f;
+				ReceivedSwiftnessAura = true;
+			}
 		}
 
 		public override void UpdateEquips()
 		{
 			ReceivedIroncladAura = false;
+			ReceivedManaWell = false;
+			ReceivedCombatMedic = false;
 
 			foreach (var a in Owned)
 				a.UpdateEquips(Player);
@@ -201,7 +294,7 @@ namespace Augments
 				if (Vector2.Distance(Player.Center, other.Center) > AuraRadius)
 					continue;
 				var otherAP = other.GetModPlayer<AugmentPlayer>();
-				if (otherAP.SupportAugmentCount < 2 || !otherAP.HasAugment("ironclad_aura"))
+				if (!otherAP.HasAugment("ironclad_aura"))
 					continue;
 				Player.statDefense += 8;
 				ReceivedIroncladAura = true;
@@ -211,10 +304,60 @@ namespace Augments
 			// Owner also benefits from their own Ironclad Aura. The
 			// !ReceivedIroncladAura guard prevents double-application if a
 			// second Support player nearby already triggered the pull loop above.
-			if (!ReceivedIroncladAura && SupportAugmentCount >= 2 && HasAugment("ironclad_aura"))
+			if (!ReceivedIroncladAura && HasAugment("ironclad_aura"))
 			{
 				Player.statDefense += 8;
 				ReceivedIroncladAura = true;
+			}
+
+			// Pull-based Mana Well: advance the mana regen timer by 30% each frame
+			// when a nearby Support player owns the augment, making mana regenerate
+			// approximately 30% faster. Player.manaRegen is a timer that counts up
+			// to Player.manaRegenDelay; advancing it extra each tick shortens the cycle.
+			for (int i = 0; i < Main.maxPlayers; i++)
+			{
+				Player other = Main.player[i];
+				if (!other.active || other.dead || other == Player)
+					continue;
+				if (Vector2.Distance(Player.Center, other.Center) > AuraRadius)
+					continue;
+				var otherAP = other.GetModPlayer<AugmentPlayer>();
+				if (!otherAP.HasAugment("mana_well"))
+					continue;
+				Player.manaRegen += (int)(Player.manaRegen * 0.30f);
+				ReceivedManaWell = true;
+				break;
+			}
+
+			// Owner also benefits from their own Mana Well.
+			if (!ReceivedManaWell && HasAugment("mana_well"))
+			{
+				Player.manaRegen += (int)(Player.manaRegen * 0.30f);
+				ReceivedManaWell = true;
+			}
+
+			// Pull-based Combat Medic: +6 lifeRegen = 3 HP/sec (lifeRegen applies at
+			// half its value per second — same field used by vanilla regen buffs/potions).
+			for (int i = 0; i < Main.maxPlayers; i++)
+			{
+				Player other = Main.player[i];
+				if (!other.active || other.dead || other == Player)
+					continue;
+				if (Vector2.Distance(Player.Center, other.Center) > AuraRadius)
+					continue;
+				var otherAP = other.GetModPlayer<AugmentPlayer>();
+				if (!otherAP.HasAugment("combat_medic"))
+					continue;
+				Player.lifeRegen += 6;
+				ReceivedCombatMedic = true;
+				break;
+			}
+
+			// Owner also benefits from their own Combat Medic.
+			if (!ReceivedCombatMedic && HasAugment("combat_medic"))
+			{
+				Player.lifeRegen += 6;
+				ReceivedCombatMedic = true;
 			}
 		}
 
@@ -325,6 +468,86 @@ namespace Augments
 		{
 			foreach (var a in Owned)
 				a.ModifyHurt(Player, ref modifiers);
+
+			// Pull-based Martyr's Resolve: check nearby Support players for the augment
+			// and apply 15% incoming damage reduction to the local player.
+			// The Support player's corresponding self-penalty (+15% damage taken) is
+			// applied inside MartyrsResolveAugment.ModifyHurt as a normal augment hook.
+			for (int i = 0; i < Main.maxPlayers; i++)
+			{
+				Player other = Main.player[i];
+				if (!other.active || other.dead || other == Player)
+					continue;
+				if (Vector2.Distance(Player.Center, other.Center) > AuraRadius)
+					continue;
+				var otherAP = other.GetModPlayer<AugmentPlayer>();
+				if (!otherAP.HasAugment("martyrs_resolve"))
+					continue;
+				modifiers.FinalDamage *= 0.85f;
+				break;
+			}
+		}
+
+		// Lifeline: fires on the dying player's own client the moment HP hits 0.
+		// Returning false prevents death; returning true allows it.
+		public override bool PreKill(double damage, int hitDirection, bool pvp, ref bool playSound, ref bool genGore, ref PlayerDeathReason damageSource)
+		{
+			if (LifelineCooldown > 0)
+				return true;
+
+			for (int i = 0; i < Main.maxPlayers; i++)
+			{
+				Player other = Main.player[i];
+				if (!other.active || other.dead || other == Player)
+					continue;
+				if (Vector2.Distance(Player.Center, other.Center) > AuraRadius)
+					continue;
+				var otherAP = other.GetModPlayer<AugmentPlayer>();
+				if (!otherAP.HasAugment("lifeline"))
+					continue;
+
+				LifelineCooldown = 5400;
+				lifelineInvulnTicks = 120;
+				Player.statLife = 1;
+				Player.AddBuff(ModContent.BuffType<LifelineCooldownBuff>(), 5400);
+				return false;
+			}
+
+			return true;
+		}
+
+		// Undying Bond: fires every tick while the local player is dead.
+		// Overrides SpawnX/SpawnY to redirect respawn to the nearest Support player
+		// who owns "undying_bond". No range limit — works regardless of distance.
+		// MULTIPLAYER FLAG: SpawnX/SpawnY are modified on the dead player's client.
+		// If the server uses its own copy for the respawn calculation, this will only
+		// work in singleplayer and a ModPacket sync will be needed for multiplayer.
+		public override void UpdateDead()
+		{
+			Player nearest = null;
+			float nearestDist = float.MaxValue;
+
+			for (int i = 0; i < Main.maxPlayers; i++)
+			{
+				Player other = Main.player[i];
+				if (!other.active || other.dead || other == Player)
+					continue;
+				var otherAP = other.GetModPlayer<AugmentPlayer>();
+				if (!otherAP.HasAugment("undying_bond"))
+					continue;
+				float dist = Vector2.Distance(Player.Center, other.Center);
+				if (dist < nearestDist)
+				{
+					nearestDist = dist;
+					nearest = other;
+				}
+			}
+
+			if (nearest != null)
+			{
+				Player.SpawnX = (int)(nearest.Center.X / 16f);
+				Player.SpawnY = (int)(nearest.Center.Y / 16f);
+			}
 		}
 
 		public override void OnHurt(Player.HurtInfo info)

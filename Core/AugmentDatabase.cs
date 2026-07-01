@@ -112,6 +112,14 @@ namespace Augments
             Register(new WarGodsTempoAugment());
             Register(new WarCryAugment());
             Register(new IroncladAuraAugment());
+            Register(new SwiftnessAuraAugment());
+            Register(new ManaWellAugment());
+            Register(new SoulLinkAugment());
+            Register(new MartyrsResolveAugment());
+            Register(new CombatMedicAugment());
+            Register(new LastRitesAugment());
+            Register(new LifelineAugment());
+            Register(new UndyingBondAugment());
         }
 
         private static void Register(Augment augment)

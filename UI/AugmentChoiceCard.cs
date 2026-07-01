@@ -211,18 +211,18 @@ namespace Augments
 			return y;
 		}
 
-		private static void DrawSupportTooltip(SpriteBatch spriteBatch, DynamicSpriteFont font)
+		internal static void DrawSupportTooltip(SpriteBatch spriteBatch, DynamicSpriteFont font)
 		{
 			const float padding = 10f;
 			const float lineSpacing = 2f;
 
 			var lines = new (string Text, Color Color)[]
 			{
-				("Support Stance",                    SupportTagColor),
-				("2 augments: -30% damage, +20 defense", Color.White),
-				("3 augments: -23% damage, +30 defense", Color.White),
-				("4 augments: -16% damage, +40 defense", Color.White),
-				("5 augments: -10% damage, +50 defense", Color.White),
+				("Support Class",                         SupportTagColor),
+				("2 augments: -30% damage, +20 defense, aura visual", Color.White),
+				("3 augments: -23% damage, +30 defense",  Color.White),
+				("4 augments: -16% damage, +40 defense",  Color.White),
+				("5 augments: -10% damage, +50 defense",  Color.White),
 				("6+ augments:  -5% damage, +60 defense", Color.White),
 			};
 

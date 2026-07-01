@@ -1,7 +1,14 @@
+using System.IO;
+using Terraria;
 using Terraria.ModLoader;
 
 namespace Augments
 {
+	internal enum AugmentPacketType : byte
+	{
+		SoulLinkHeal
+	}
+
 	public class Augments : Mod
 	{
 		public static ModKeybind OpenAugmentListKeybind;
@@ -32,6 +39,21 @@ namespace Augments
 			DebugTriggerPopupKeybind = null;
 			DebugSpawnVendorKeybind = null;
 			DebugToggleShopKeybind = null;
+		}
+
+		public override void HandlePacket(BinaryReader reader, int whoAmI)
+		{
+			var type = (AugmentPacketType)reader.ReadByte();
+			switch (type)
+			{
+				case AugmentPacketType.SoulLinkHeal:
+					byte targetIndex = reader.ReadByte();
+					int healAmount = reader.ReadInt32();
+					// Player.Heal() calls NetMessage.SendData(MessageID.PlayerHp) internally
+					// when running on the server, syncing the HP change to all clients.
+					Main.player[targetIndex].Heal(healAmount);
+					break;
+			}
 		}
 	}
 }

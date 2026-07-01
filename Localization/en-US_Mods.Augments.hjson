@@ -30,9 +30,24 @@ Items: {
 }
 
 Buffs: {
+	SupportClassBuff: {
+		DisplayName: Support Class
+		Description: Your aura augments are active.
+	}
+
 	WarCryBuff: {
 		DisplayName: Warcry
 		Description: Dealing increased damage.
+	}
+
+	LastRitesCooldownBuff: {
+		DisplayName: Last Rites: On Cooldown
+		Description: Protected by a nearby Support player recently.
+	}
+
+	LifelineCooldownBuff: {
+		DisplayName: Lifeline: On Cooldown
+		Description: Saved from death by a nearby Support player recently.
 	}
 }
 

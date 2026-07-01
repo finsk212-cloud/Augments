@@ -20,5 +20,6 @@ namespace Augments
         public static string Immobilize(string text) => Color(text, AugmentTextColors.ImmobilizeHex);
         public static string Frostburn(string text) => Color(text, AugmentTextColors.FrostburnHex);
         public static string MovementSpeed(string text) => Color(text, AugmentTextColors.MovementSpeedHex);
+        public static string SupportClass(string text) => Color(text, AugmentTextColors.SupportClassHex);
     }
 }

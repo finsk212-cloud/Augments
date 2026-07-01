@@ -131,8 +131,6 @@ namespace Augments
 			);
 
 			// Inserted last = drawn first = beneath all UI panels but above the game world.
-			// Uses InterfaceScaleType.Game so the spriteBatch gets the camera matrix
-			// and AugmentAuraDrawer can pass world coordinates directly.
 			layers.Insert(mouseTextIndex, new LegacyGameInterfaceLayer(
 				"Augments: Auras",
 				delegate
@@ -140,7 +138,7 @@ namespace Augments
 					AugmentAuraDrawer.DrawAuras(Main.spriteBatch);
 					return true;
 				},
-				InterfaceScaleType.Game)
+				InterfaceScaleType.UI)
 			);
 		}
 
