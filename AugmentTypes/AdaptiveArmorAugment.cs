@@ -17,34 +17,33 @@ namespace Augments
         private const int TicksPerStack = 120;
         private const int MaxBonus = 10;
 
-        private int undamagedTimer;
-        private int defenseBonus;
-
-        public override int? StatusValue => defenseBonus > 0 ? defenseBonus : (int?)null;
+        public override int? StatusValue => LocalPlayerState.AdaptiveArmorDefenseBonus > 0 ? LocalPlayerState.AdaptiveArmorDefenseBonus : (int?)null;
         public override Color StatusValueColor => AugmentTextColors.SpecialDamage;
 
         public override void OnUpdate(Player player)
         {
-            if (defenseBonus >= MaxBonus)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.AdaptiveArmorDefenseBonus >= MaxBonus)
                 return;
 
-            undamagedTimer++;
-            if (undamagedTimer >= TicksPerStack)
+            ap.AdaptiveArmorUndamagedTimer++;
+            if (ap.AdaptiveArmorUndamagedTimer >= TicksPerStack)
             {
-                undamagedTimer = 0;
-                defenseBonus++;
+                ap.AdaptiveArmorUndamagedTimer = 0;
+                ap.AdaptiveArmorDefenseBonus++;
             }
         }
 
         public override void OnHurt(Player player, Player.HurtInfo info)
         {
-            undamagedTimer = 0;
-            defenseBonus = 0;
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            ap.AdaptiveArmorUndamagedTimer = 0;
+            ap.AdaptiveArmorDefenseBonus = 0;
         }
 
         public override void UpdateEquips(Player player)
         {
-            player.statDefense += defenseBonus;
+            player.statDefense += player.GetModPlayer<AugmentPlayer>().AdaptiveArmorDefenseBonus;
         }
     }
 }

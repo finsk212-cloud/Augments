@@ -18,15 +18,14 @@ namespace Augments
         private const float TriggerThreshold = 0.25f;
         private const int HealAmount = 40;
 
-        private int cooldownRemaining;
-
-        public override int CooldownRemaining => cooldownRemaining;
+        public override int CooldownRemaining => LocalPlayerState.SecondWindCooldown;
 
         public override void OnUpdate(Player player)
         {
-            if (cooldownRemaining > 0)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.SecondWindCooldown > 0)
             {
-                cooldownRemaining--;
+                ap.SecondWindCooldown--;
                 return;
             }
 
@@ -34,7 +33,7 @@ namespace Augments
             {
                 player.statLife = Math.Min(player.statLife + HealAmount, player.statLifeMax2);
                 player.HealEffect(HealAmount);
-                cooldownRemaining = CooldownTicks;
+                ap.SecondWindCooldown = CooldownTicks;
             }
         }
     }

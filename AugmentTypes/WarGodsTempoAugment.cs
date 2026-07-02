@@ -1,4 +1,4 @@
-﻿using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.ModLoader;
 
@@ -17,9 +17,6 @@ namespace Augments
         private const int MaxTempo = 8;
         private const int ResetDelayTicks = 300;
         private const int ShockwaveDamage = 90;
-
-        private int tempo;
-        private int tempoResetTimer;
 
         public override void OnHitNPCWithItem(
             Player player,
@@ -47,21 +44,23 @@ namespace Augments
 
         public override void OnUpdate(Player player)
         {
-            if (tempoResetTimer <= 0)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.WarGodsTempoResetTimer <= 0)
                 return;
 
-            tempoResetTimer--;
-            if (tempoResetTimer == 0)
-                tempo = 0;
+            ap.WarGodsTempoResetTimer--;
+            if (ap.WarGodsTempoResetTimer == 0)
+                ap.WarGodsTempoStacks = 0;
         }
 
-        private void RegisterMeleeHit(Player player, NPC target)
+        private static void RegisterMeleeHit(Player player, NPC target)
         {
-            tempoResetTimer = ResetDelayTicks;
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            ap.WarGodsTempoResetTimer = ResetDelayTicks;
 
-            if (tempo >= MaxTempo)
+            if (ap.WarGodsTempoStacks >= MaxTempo)
             {
-                tempo = 0;
+                ap.WarGodsTempoStacks = 0;
                 Projectile.NewProjectile(
                     player.GetSource_FromThis(),
                     target.Center,
@@ -74,7 +73,7 @@ namespace Augments
                 return;
             }
 
-            tempo++;
+            ap.WarGodsTempoStacks++;
         }
     }
 }

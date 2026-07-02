@@ -19,7 +19,7 @@ namespace Augments
 
         public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
         {
-            if (proj.DamageType != DamageClass.Summon || !proj.minion)
+            if (!proj.CountsAsClass(DamageClass.Summon) || !proj.minion)
                 return;
 
             if (proj.GetGlobalProjectile<AugmentProjectileTag>().IsAugmentProcDamage)

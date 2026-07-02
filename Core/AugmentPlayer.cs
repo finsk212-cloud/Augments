@@ -272,6 +272,82 @@ namespace Augments
 		public HashSet<int> TrophyHunterKilledTypes = new HashSet<int>();
 		public int LuckyFindCopperGained;
 
+		// Per-player combat/timer state for the remaining augments that previously
+		// kept these on their singleton instances in AugmentDatabase.All (shared by
+		// every player — the same multiplayer state-corruption bug as TrophyHunter/
+		// LuckyFind above). All volatile session state: intentionally NOT persisted,
+		// matching the old singleton behavior which reset on every mod reload
+		// (RavenousSwarm's slot bonus is documented session-only by design).
+		public int AdaptiveArmorUndamagedTimer;
+		public int AdaptiveArmorDefenseBonus;
+		public int AmbushStillTicks;
+		public bool AmbushReady;
+		public float ApexHunterMarkStacks;
+		public float ArcaneSingularityCharge;
+		public int AvatarOfRageLastLife = -1;
+		public int BulwarkNoDamageTicks;
+		public int DeadeyeLastTargetWhoAmI = -1;
+		public float DeadeyeHitStacks;
+		internal readonly List<EchoChamberAugment.PendingEcho> EchoChamberPendingEchoes = new List<EchoChamberAugment.PendingEcho>();
+		public int EldritchCovenantCorruption;
+		public int EldritchCovenantManaProgress;
+		public int EternalFlameBoostTicks;
+		public int FeatherfallSpeedBurstTicks;
+		public int FortunesFavorRegenTimer;
+		public int FrenziedAssaultStacks;
+		public int FrenziedAssaultResetTimer;
+		public int GetExcitedTimer;
+		public int GetExcitedStacks;
+		public int GodslayerBladeCooldown;
+		public bool GrappleMasterWasGrappling;
+		public int GrappleMasterSpeedBurstTicks;
+		public int HuntersPaceSpeedTimer;
+		public float HuntersPaceCurrentBonus;
+		public int InfernosHeartChargeStacks;
+		public int InfernosHeartResetTimer;
+		public float IronRhythmHitCounter;
+		public int IronRhythmPendingSpecialDamage;
+		public int IronWillDurationRemaining;
+		public int IronWillCooldown;
+		public int LastStandCooldown;
+		public bool LastStandArmedThisHit;
+		public int MinionMomentumHitStacks;
+		public int MinionMomentumActiveMinionProjType = -1;
+		public int MirrorImageInvulnTicks;
+		public float MomentumCrashPreviousSpeed;
+		public int MomentumCrashDashWindowTimer;
+		public bool MomentumCrashPendingConfuse;
+		public int MomentumSwingLastTargetWhoAmI = -1;
+		public int MomentumSwingStacks;
+		public int MomentumSwingResetTimer;
+		public float OverchargeRoundHitStacks;
+		public int OverchargeRoundResetTimer;
+		public int OverwhelmLastTargetWhoAmI = -1;
+		public int OverwhelmHitCounter;
+		public int OverwhelmResetTimer;
+		public bool PhoenixHeartArmedThisHit;
+		public int PhoenixHeartCooldown;
+		public int PhoenixHeartInvulnTicks;
+		public int PiedPiperCooldown;
+		public int PiedPiperDurationRemaining;
+		public int PotionRushTimer;
+		public int QuickRecoveryRegenTimer;
+		public int RavenousSwarmSlotsGranted;
+		public int RiposteWindowRemaining;
+		public int ScavengersLuckBuffTicks;
+		public int SecondWindCooldown;
+		public float SteadyHandsCurrentCritBonus;
+		public int SteadyHandsRampTicks;
+		public bool TwinStrikeItemProcPending;
+		public bool TwinStrikeProjProcPending;
+		public int VoidStepKillStacks;
+		public int VoidStepResetTimer;
+		public int VoidStepInvulnTicks;
+		public int WarGodsTempoStacks;
+		public int WarGodsTempoResetTimer;
+		public int WildCardSpeedTicks;
+		public int WildCardInvulnTicks;
+
 		// Snapshot taken by CopyClientState each tick for change detection.
 		// Only used by SendClientChanges; not persisted and never read by game logic.
 		private HashSet<string> syncedOwnedIds = new HashSet<string>();
@@ -1089,6 +1165,76 @@ namespace Augments
 			DamagedBossesThisFight = new HashSet<int>();
 			TrophyHunterKilledTypes = new HashSet<int>();
 			LuckyFindCopperGained = 0;
+
+			AdaptiveArmorUndamagedTimer = 0;
+			AdaptiveArmorDefenseBonus = 0;
+			AmbushStillTicks = 0;
+			AmbushReady = false;
+			ApexHunterMarkStacks = 0f;
+			ArcaneSingularityCharge = 0f;
+			AvatarOfRageLastLife = -1;
+			BulwarkNoDamageTicks = 0;
+			DeadeyeLastTargetWhoAmI = -1;
+			DeadeyeHitStacks = 0f;
+			EchoChamberPendingEchoes.Clear();
+			EldritchCovenantCorruption = 0;
+			EldritchCovenantManaProgress = 0;
+			EternalFlameBoostTicks = 0;
+			FeatherfallSpeedBurstTicks = 0;
+			FortunesFavorRegenTimer = 0;
+			FrenziedAssaultStacks = 0;
+			FrenziedAssaultResetTimer = 0;
+			GetExcitedTimer = 0;
+			GetExcitedStacks = 0;
+			GodslayerBladeCooldown = 0;
+			GrappleMasterWasGrappling = false;
+			GrappleMasterSpeedBurstTicks = 0;
+			HuntersPaceSpeedTimer = 0;
+			HuntersPaceCurrentBonus = 0f;
+			InfernosHeartChargeStacks = 0;
+			InfernosHeartResetTimer = 0;
+			IronRhythmHitCounter = 0f;
+			IronRhythmPendingSpecialDamage = 0;
+			IronWillDurationRemaining = 0;
+			IronWillCooldown = 0;
+			LastStandCooldown = 0;
+			LastStandArmedThisHit = false;
+			MinionMomentumHitStacks = 0;
+			MinionMomentumActiveMinionProjType = -1;
+			MirrorImageInvulnTicks = 0;
+			MomentumCrashPreviousSpeed = 0f;
+			MomentumCrashDashWindowTimer = 0;
+			MomentumCrashPendingConfuse = false;
+			MomentumSwingLastTargetWhoAmI = -1;
+			MomentumSwingStacks = 0;
+			MomentumSwingResetTimer = 0;
+			OverchargeRoundHitStacks = 0f;
+			OverchargeRoundResetTimer = 0;
+			OverwhelmLastTargetWhoAmI = -1;
+			OverwhelmHitCounter = 0;
+			OverwhelmResetTimer = 0;
+			PhoenixHeartArmedThisHit = false;
+			PhoenixHeartCooldown = 0;
+			PhoenixHeartInvulnTicks = 0;
+			PiedPiperCooldown = 0;
+			PiedPiperDurationRemaining = 0;
+			PotionRushTimer = 0;
+			QuickRecoveryRegenTimer = 0;
+			RavenousSwarmSlotsGranted = 0;
+			RiposteWindowRemaining = 0;
+			ScavengersLuckBuffTicks = 0;
+			SecondWindCooldown = 0;
+			SteadyHandsCurrentCritBonus = 0f;
+			SteadyHandsRampTicks = 0;
+			TwinStrikeItemProcPending = false;
+			TwinStrikeProjProcPending = false;
+			VoidStepKillStacks = 0;
+			VoidStepResetTimer = 0;
+			VoidStepInvulnTicks = 0;
+			WarGodsTempoStacks = 0;
+			WarGodsTempoResetTimer = 0;
+			WildCardSpeedTicks = 0;
+			WildCardInvulnTicks = 0;
 		}
 
 		public override void OnEnterWorld()

@@ -18,13 +18,10 @@ namespace Augments
         private const int MaxStacks = 8;
         private const float CritPerStack = 2f;
 
-        private int lastTargetWhoAmI = -1;
-        private float hitStacks;
-
         // Shows "+X%" in the cooldown/status row while stacks are active,
         // same StatusValue mechanism ScavengersLuckAugment uses for its crit
         // buff, reusing the existing Crit color category.
-        public override int? StatusValue => hitStacks > 0 ? (int)(hitStacks * CritPerStack) : (int?)null;
+        public override int? StatusValue => LocalPlayerState.DeadeyeHitStacks > 0 ? (int)(LocalPlayerState.DeadeyeHitStacks * CritPerStack) : (int?)null;
         public override Color StatusValueColor => AugmentTextColors.Crit;
         public override string StatusValueSuffix => "%";
 
@@ -35,33 +32,34 @@ namespace Augments
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
             if (item.DamageType == DamageClass.Ranged)
-                ApplyStack(target);
+                ApplyStack(player, target);
         }
 
         public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
         {
             if (proj.DamageType == DamageClass.Ranged)
-                ApplyStack(target);
+                ApplyStack(player, target);
         }
 
-        private void ApplyStack(NPC target)
+        private void ApplyStack(Player player, NPC target)
         {
-            if (target.whoAmI == lastTargetWhoAmI)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (target.whoAmI == ap.DeadeyeLastTargetWhoAmI)
             {
-                if (hitStacks < MaxStacks)
-                    hitStacks += HitEffectiveness;
+                if (ap.DeadeyeHitStacks < MaxStacks)
+                    ap.DeadeyeHitStacks += HitEffectiveness;
             }
             else
             {
-                hitStacks = HitEffectiveness;
-                lastTargetWhoAmI = target.whoAmI;
+                ap.DeadeyeHitStacks = HitEffectiveness;
+                ap.DeadeyeLastTargetWhoAmI = target.whoAmI;
             }
         }
 
         public override void ModifyWeaponCrit(Player player, Item item, ref float crit)
         {
             if (item.DamageType == DamageClass.Ranged)
-                crit += hitStacks * CritPerStack;
+                crit += player.GetModPlayer<AugmentPlayer>().DeadeyeHitStacks * CritPerStack;
         }
     }
 }

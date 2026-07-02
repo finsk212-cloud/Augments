@@ -27,7 +27,19 @@ namespace Augments
 			if (npc.lifeRegen >= 0)
 				return;
 
-			if (!Main.LocalPlayer.GetModPlayer<AugmentPlayer>().HasAugment("festering_wounds"))
+			// UpdateLifeRegen gets no attacker/player parameter, and this hook runs
+			// identically on every client plus the server - checking Main.LocalPlayer
+			// would check whichever player happens to be local to whichever machine is
+			// running this code (nobody, on a dedicated server; the host, not the actual
+			// attacker, in hosted play), amplifying the wrong NPC's DoT or none at all.
+			// npc.lastInteraction is the synced, network-consistent field that actually
+			// identifies who's fighting this NPC - same field AugmentGlobalNPC.OnKill
+			// already uses to attribute a kill to the right player.
+			if (npc.lastInteraction < 0 || npc.lastInteraction >= Main.maxPlayers)
+				return;
+
+			Player attacker = Main.player[npc.lastInteraction];
+			if (!attacker.active || !attacker.GetModPlayer<AugmentPlayer>().HasAugment("festering_wounds"))
 				return;
 
 			npc.lifeRegen = (int)(npc.lifeRegen * Amplification);

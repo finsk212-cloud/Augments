@@ -1,4 +1,4 @@
-﻿using Terraria;
+using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
 
@@ -21,10 +21,6 @@ namespace Augments
 		private const float DamageReductionPercent = 0.75f;
 		private const int ConfusedDurationTicks = 90;
 
-		private float previousSpeed;
-		private int dashWindowTimer;
-		private bool pendingConfuse;
-
 		// Generic velocity-spike dash detection - vanilla has no single shared
 		// "is dashing" flag across Shield of Cthulhu/Tabi/Master Ninja Gear (or
 		// modded equivalents), so we watch for a sudden jump in speed instead.
@@ -34,14 +30,15 @@ namespace Augments
 		// high speed (falling, minecarts, etc.) can't keep re-triggering every tick.
 		public override void OnUpdate(Player player)
 		{
+			var ap = player.GetModPlayer<AugmentPlayer>();
 			float currentSpeed = player.velocity.Length();
 
-			if (dashWindowTimer > 0)
-				dashWindowTimer--;
-			else if (!player.immune && currentSpeed - previousSpeed > VelocitySpikeThreshold)
-				dashWindowTimer = DashWindowTicks;
+			if (ap.MomentumCrashDashWindowTimer > 0)
+				ap.MomentumCrashDashWindowTimer--;
+			else if (!player.immune && currentSpeed - ap.MomentumCrashPreviousSpeed > VelocitySpikeThreshold)
+				ap.MomentumCrashDashWindowTimer = DashWindowTicks;
 
-			previousSpeed = currentSpeed;
+			ap.MomentumCrashPreviousSpeed = currentSpeed;
 		}
 
 		// Shield of Cthulhu-style dash damage is dealt through a separate
@@ -51,48 +48,50 @@ namespace Augments
 		// while the window from OnUpdate is still open.
 		public override void ModifyHurt(Player player, ref Player.HurtModifiers modifiers)
 		{
-			if (dashWindowTimer > 0)
+			if (player.GetModPlayer<AugmentPlayer>().MomentumCrashDashWindowTimer > 0)
 				modifiers.FinalDamage *= 1f - DamageReductionPercent;
 		}
 
 		public override void ModifyHitNPCWithItem(Player player, Item item, NPC target, ref NPC.HitModifiers modifiers)
 		{
 			if (item.CountsAsClass(DamageClass.Melee))
-				TryTriggerDashImpact(item.damage, ref modifiers);
+				TryTriggerDashImpact(player, item.damage, ref modifiers);
 		}
 
 		public override void ModifyHitNPCWithProj(Player player, Projectile proj, NPC target, ref NPC.HitModifiers modifiers)
 		{
 			if (proj.CountsAsClass(DamageClass.Melee))
-				TryTriggerDashImpact(proj.damage, ref modifiers);
+				TryTriggerDashImpact(player, proj.damage, ref modifiers);
 		}
 
-		private void TryTriggerDashImpact(int baseDamage, ref NPC.HitModifiers modifiers)
+		private static void TryTriggerDashImpact(Player player, int baseDamage, ref NPC.HitModifiers modifiers)
 		{
-			if (dashWindowTimer <= 0)
+			var ap = player.GetModPlayer<AugmentPlayer>();
+			if (ap.MomentumCrashDashWindowTimer <= 0)
 				return;
 
 			modifiers.FlatBonusDamage += (int)(baseDamage * BonusDamagePercent);
-			pendingConfuse = true;
-			dashWindowTimer = 0;
+			ap.MomentumCrashPendingConfuse = true;
+			ap.MomentumCrashDashWindowTimer = 0;
 		}
 
 		public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
 		{
-			ApplyPendingConfuse(target);
+			ApplyPendingConfuse(player, target);
 		}
 
 		public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
 		{
-			ApplyPendingConfuse(target);
+			ApplyPendingConfuse(player, target);
 		}
 
-		private void ApplyPendingConfuse(NPC target)
+		private static void ApplyPendingConfuse(Player player, NPC target)
 		{
-			if (!pendingConfuse)
+			var ap = player.GetModPlayer<AugmentPlayer>();
+			if (!ap.MomentumCrashPendingConfuse)
 				return;
 
-			pendingConfuse = false;
+			ap.MomentumCrashPendingConfuse = false;
 			target.AddBuff(BuffID.Confused, ConfusedDurationTicks);
 		}
 	}

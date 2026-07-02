@@ -1,4 +1,4 @@
-﻿using Terraria;
+using Terraria;
 using Terraria.ModLoader;
 
 namespace Augments
@@ -18,43 +18,43 @@ namespace Augments
 		private const int MaxStacks = 5;
 		private const float AttackSpeedPerStack = 0.07f;
 
-		private int stacks;
-		private int resetTimer;
-
 		public override void OnUpdate(Player player)
 		{
-			if (resetTimer <= 0)
+			var ap = player.GetModPlayer<AugmentPlayer>();
+			if (ap.FrenziedAssaultResetTimer <= 0)
 				return;
 
-			resetTimer--;
-			if (resetTimer == 0)
-				stacks = 0;
+			ap.FrenziedAssaultResetTimer--;
+			if (ap.FrenziedAssaultResetTimer == 0)
+				ap.FrenziedAssaultStacks = 0;
 		}
 
 		public override void UpdateEquips(Player player)
 		{
-			if (stacks > 0)
-				player.GetAttackSpeed(DamageClass.Melee) += stacks * AttackSpeedPerStack;
+			var ap = player.GetModPlayer<AugmentPlayer>();
+			if (ap.FrenziedAssaultStacks > 0)
+				player.GetAttackSpeed(DamageClass.Melee) += ap.FrenziedAssaultStacks * AttackSpeedPerStack;
 		}
 
 		public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
 		{
 			if (item.CountsAsClass(DamageClass.Melee) && hit.Crit)
-				RegisterCrit();
+				RegisterCrit(player);
 		}
 
 		public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
 		{
 			if (proj.CountsAsClass(DamageClass.Melee) && hit.Crit)
-				RegisterCrit();
+				RegisterCrit(player);
 		}
 
-		private void RegisterCrit()
+		private static void RegisterCrit(Player player)
 		{
-			if (stacks < MaxStacks)
-				stacks++;
+			var ap = player.GetModPlayer<AugmentPlayer>();
+			if (ap.FrenziedAssaultStacks < MaxStacks)
+				ap.FrenziedAssaultStacks++;
 
-			resetTimer = ResetWindowTicks;
+			ap.FrenziedAssaultResetTimer = ResetWindowTicks;
 		}
 	}
 }

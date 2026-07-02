@@ -1,4 +1,4 @@
-﻿using Terraria;
+using Terraria;
 using Terraria.ModLoader;
 
 namespace Augments
@@ -17,13 +17,11 @@ namespace Augments
         private const float ProcChance = 0.05f;
         private const int MaxSlotsGranted = 3;
 
-        private int slotsGranted;
-
         // Shows "+X" in the cooldown/status row while at least one bonus
         // slot has been granted this session - no dedicated "minion slots"
         // color category exists yet, so this stays the default white rather
         // than adding one unasked.
-        public override int? StatusValue => slotsGranted > 0 ? slotsGranted : (int?)null;
+        public override int? StatusValue => LocalPlayerState.RavenousSwarmSlotsGranted > 0 ? LocalPlayerState.RavenousSwarmSlotsGranted : (int?)null;
 
         // Direct hits just tag the target - the actual roll happens on kill
         // credit (OnKillNPC below), since that's the only path that also
@@ -52,11 +50,12 @@ namespace Augments
 
             marker.ClearTag();
 
-            if (slotsGranted >= MaxSlotsGranted)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.RavenousSwarmSlotsGranted >= MaxSlotsGranted)
                 return;
 
             if (Main.rand.NextFloat() < ProcChance)
-                slotsGranted++;
+                ap.RavenousSwarmSlotsGranted++;
         }
 
         // player.maxMinions gets reset to its base value of 1 in
@@ -67,11 +66,11 @@ namespace Augments
         // every other persistent stat bonus in this mod (defense, etc).
         public override void UpdateEquips(Player player)
         {
-            player.maxMinions += slotsGranted;
+            player.maxMinions += player.GetModPlayer<AugmentPlayer>().RavenousSwarmSlotsGranted;
         }
 
-        // Intentionally session-only, not saved/loaded - slotsGranted (and
-        // therefore the maxMinions bonus it reapplies) naturally resets to 0
+        // Intentionally session-only, not saved/loaded - RavenousSwarmSlotsGranted
+        // (and therefore the maxMinions bonus it reapplies) naturally resets to 0
         // on the next mod/game load along with every other in-memory augment
         // field. That's the confirmed design, not a gap to patch with
         // SaveCustomData.

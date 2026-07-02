@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.ModLoader;
@@ -16,19 +16,18 @@ namespace Augments
 
         public override AugmentRarity Rarity => AugmentRarity.Legendary;
         public override AugmentClass Class => AugmentClass.Melee;
-        public override int CooldownRemaining => cooldownRemaining;
+        public override int CooldownRemaining => LocalPlayerState.GodslayerBladeCooldown;
 
         private const int CooldownTicks = 120;
         private const float SwordDamageMultiplier = 0.75f;
         private const float SpawnHeight = 600f;
         private const float FallSpeed = 18f;
 
-        private int cooldownRemaining;
-
         public override void OnUpdate(Player player)
         {
-            if (cooldownRemaining > 0)
-                cooldownRemaining--;
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.GodslayerBladeCooldown > 0)
+                ap.GodslayerBladeCooldown--;
         }
 
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
@@ -45,10 +44,11 @@ namespace Augments
 
         private void TrySummonSword(Player player, NPC target, int baseDamage)
         {
-            if (cooldownRemaining > 0)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.GodslayerBladeCooldown > 0)
                 return;
 
-            cooldownRemaining = CooldownTicks;
+            ap.GodslayerBladeCooldown = CooldownTicks;
             Vector2 spawnPosition = target.Center - new Vector2(0f, SpawnHeight);
             int swordDamage = Math.Max(1, (int)(baseDamage * SwordDamageMultiplier));
 

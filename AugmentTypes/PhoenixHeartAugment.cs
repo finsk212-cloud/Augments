@@ -25,55 +25,53 @@ namespace Augments
         // 12 in-game hours * 3600 ticks/hour.
         private const int CooldownTicks = 43200;
 
-        private bool armedThisHit;
-
-        private int cooldownRemaining;
-        private int invulnTicksRemaining;
-
         public override bool CooldownDisplayInHours => true;
 
-        public override int CooldownRemaining => cooldownRemaining;
+        public override int CooldownRemaining => LocalPlayerState.PhoenixHeartCooldown;
 
         public override void OnUpdate(Player player)
         {
-            if (cooldownRemaining > 0)
-                cooldownRemaining--;
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.PhoenixHeartCooldown > 0)
+                ap.PhoenixHeartCooldown--;
 
             // Vanilla's own "just took damage" invulnerability assignment
             // overwrites player.immuneTime with its own short window right
             // after our trigger sets it - re-force our value every tick
             // instead of setting it once and hoping it survives.
-            if (invulnTicksRemaining > 0)
+            if (ap.PhoenixHeartInvulnTicks > 0)
             {
                 player.immune = true;
-                player.immuneTime = invulnTicksRemaining;
-                invulnTicksRemaining--;
+                player.immuneTime = ap.PhoenixHeartInvulnTicks;
+                ap.PhoenixHeartInvulnTicks--;
 
                 // Cooldown starts once invulnerability actually runs out, not
                 // the instant the trigger fires, so the full 12 hours is spent
                 // on cooldown rather than overlapping with the invuln window.
-                if (invulnTicksRemaining == 0)
-                    cooldownRemaining = CooldownTicks;
+                if (ap.PhoenixHeartInvulnTicks == 0)
+                    ap.PhoenixHeartCooldown = CooldownTicks;
             }
         }
 
         public override void ModifyHurt(Player player, ref Player.HurtModifiers modifiers)
         {
-            armedThisHit = false;
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            ap.PhoenixHeartArmedThisHit = false;
 
-            if (cooldownRemaining > 0 || player.statLife <= 1)
+            if (ap.PhoenixHeartCooldown > 0 || player.statLife <= 1)
                 return;
 
             modifiers.SetMaxDamage(player.statLife - 1);
-            armedThisHit = true;
+            ap.PhoenixHeartArmedThisHit = true;
         }
 
         public override void OnHurt(Player player, Player.HurtInfo info)
         {
-            if (!armedThisHit)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (!ap.PhoenixHeartArmedThisHit)
                 return;
 
-            armedThisHit = false;
+            ap.PhoenixHeartArmedThisHit = false;
 
             if (info.Damage != player.statLife - 1)
                 return;
@@ -83,7 +81,7 @@ namespace Augments
             // on statLifeMax2 instead of getting overwritten by the killing blow.
             player.statLife = player.statLifeMax2 + info.Damage;
             player.immune = true;
-            invulnTicksRemaining = InvulnerabilityTicks;
+            ap.PhoenixHeartInvulnTicks = InvulnerabilityTicks;
         }
     }
 }

@@ -15,12 +15,11 @@ namespace Augments
 
         private const int ChargeTicksRequired = 600;
 
-        private int noDamageTicks;
-
         public override void OnUpdate(Player player)
         {
-            if (noDamageTicks < ChargeTicksRequired)
-                noDamageTicks++;
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.BulwarkNoDamageTicks < ChargeTicksRequired)
+                ap.BulwarkNoDamageTicks++;
         }
 
         // Unlike MirrorImageAugment, no manual invincibility-window
@@ -29,16 +28,17 @@ namespace Augments
         // there's no risk of it firing twice in quick succession.
         public override bool FreeDodge(Player player, Player.HurtInfo info)
         {
-            if (noDamageTicks < ChargeTicksRequired)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.BulwarkNoDamageTicks < ChargeTicksRequired)
                 return false;
 
-            noDamageTicks = 0;
+            ap.BulwarkNoDamageTicks = 0;
             return true;
         }
 
         public override void OnHurt(Player player, Player.HurtInfo info)
         {
-            noDamageTicks = 0;
+            player.GetModPlayer<AugmentPlayer>().BulwarkNoDamageTicks = 0;
         }
     }
 }

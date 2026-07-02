@@ -20,8 +20,6 @@ namespace Augments
         private const float EchoEffectiveness = 0.5f;
         private const int EchoDelayTicks = 12;
 
-        private readonly List<PendingEcho> pendingEchoes = new List<PendingEcho>();
-
         public override void OnShootProjectile(Player player, Item item, Projectile projectile)
         {
             if (projectile.owner != Main.myPlayer || projectile.DamageType != DamageClass.Ranged)
@@ -34,7 +32,7 @@ namespace Augments
             if (originalTag.IsAugmentProcDamage && !originalTag.CanTriggerOnHitAugments)
                 return;
 
-            pendingEchoes.Add(new PendingEcho(projectile));
+            player.GetModPlayer<AugmentPlayer>().EchoChamberPendingEchoes.Add(new PendingEcho(projectile));
         }
 
         public override void OnUpdate(Player player)
@@ -42,6 +40,7 @@ namespace Augments
             if (player.whoAmI != Main.myPlayer)
                 return;
 
+            List<PendingEcho> pendingEchoes = player.GetModPlayer<AugmentPlayer>().EchoChamberPendingEchoes;
             for (int i = pendingEchoes.Count - 1; i >= 0; i--)
             {
                 PendingEcho pending = pendingEchoes[i];
@@ -89,7 +88,9 @@ namespace Augments
             echo.netUpdate = true;
         }
 
-        private class PendingEcho
+        // Queued echoes live on AugmentPlayer (per-player), since this augment
+        // instance is a singleton shared by every player.
+        internal class PendingEcho
         {
             public int TicksRemaining = EchoDelayTicks;
             public readonly Vector2 Position;

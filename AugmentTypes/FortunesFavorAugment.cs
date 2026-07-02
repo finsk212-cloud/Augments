@@ -19,15 +19,14 @@ namespace Augments
         private const int RegenIntervalTicks = 240;
         private const int HealAmount = 1;
 
-        private int regenTimer;
-
         public override void OnUpdate(Player player)
         {
-            regenTimer++;
-            if (regenTimer < RegenIntervalTicks)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            ap.FortunesFavorRegenTimer++;
+            if (ap.FortunesFavorRegenTimer < RegenIntervalTicks)
                 return;
 
-            regenTimer = 0;
+            ap.FortunesFavorRegenTimer = 0;
             player.statLife = Math.Min(player.statLife + HealAmount, player.statLifeMax2);
             player.HealEffect(HealAmount);
         }

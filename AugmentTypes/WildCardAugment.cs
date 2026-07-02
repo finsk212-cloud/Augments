@@ -23,9 +23,6 @@ namespace Augments
         private const int InvulnerabilityTicks = 60;
         private const float BonusStrikeDamagePercent = 0.2f;
 
-        private int speedTicksRemaining;
-        private int invulnTicksRemaining;
-
         // NPC.HitModifiers (the struct ModifyHitNPCWithItem/Proj receives)
         // has no public way to read whether this hit will be a crit - only
         // a private override plus write-only SetCrit()/DisableCrit() - the
@@ -53,6 +50,7 @@ namespace Augments
 
         private void RollOutcome(Player player, NPC target, NPC.HitInfo hit)
         {
+            var ap = player.GetModPlayer<AugmentPlayer>();
             switch (Main.rand.Next(4))
             {
                 case 0:
@@ -61,10 +59,10 @@ namespace Augments
                     player.HealEffect(healing);
                     break;
                 case 1:
-                    speedTicksRemaining = ScaleHitEffect(SpeedDurationTicks);
+                    ap.WildCardSpeedTicks = ScaleHitEffect(SpeedDurationTicks);
                     break;
                 case 2:
-                    invulnTicksRemaining = ScaleHitEffect(InvulnerabilityTicks);
+                    ap.WildCardInvulnTicks = ScaleHitEffect(InvulnerabilityTicks);
                     break;
                 case 3:
                     target.SimpleStrikeNPC(ScaleHitEffect((int)(hit.Damage * BonusStrikeDamagePercent)), player.direction);
@@ -74,18 +72,19 @@ namespace Augments
 
         public override void OnUpdate(Player player)
         {
-            if (speedTicksRemaining > 0)
-                speedTicksRemaining--;
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.WildCardSpeedTicks > 0)
+                ap.WildCardSpeedTicks--;
 
             // FreeDodge-style hits get their own automatic invuln window, but
             // a manually-started one like this isn't reliable unless it's
             // re-forced every tick - same lesson MirrorImageAugment already
             // learned.
-            if (invulnTicksRemaining > 0)
+            if (ap.WildCardInvulnTicks > 0)
             {
                 player.immune = true;
-                player.immuneTime = invulnTicksRemaining;
-                invulnTicksRemaining--;
+                player.immuneTime = ap.WildCardInvulnTicks;
+                ap.WildCardInvulnTicks--;
             }
         }
 
@@ -96,7 +95,7 @@ namespace Augments
         // to actually stick.
         public override void PostUpdateRunSpeeds(Player player)
         {
-            if (speedTicksRemaining <= 0)
+            if (player.GetModPlayer<AugmentPlayer>().WildCardSpeedTicks <= 0)
                 return;
 
             player.maxRunSpeed *= 1f + SpeedBonus;

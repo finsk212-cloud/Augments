@@ -16,45 +16,45 @@ namespace Augments
         private const int SpeedDurationTicks = 120;
         private const float SpeedBonus = 0.15f;
 
-        private int speedTimer;
-        private float currentBonus;
-
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
             if (item.DamageType == DamageClass.Ranged)
-                RefreshSpeedBonus();
+                RefreshSpeedBonus(player);
         }
 
         public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
         {
             if (proj.DamageType == DamageClass.Ranged)
-                RefreshSpeedBonus();
+                RefreshSpeedBonus(player);
         }
 
         public override void OnUpdate(Player player)
         {
-            if (speedTimer <= 0)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.HuntersPaceSpeedTimer <= 0)
                 return;
 
-            speedTimer--;
-            if (speedTimer == 0)
-                currentBonus = 0f;
+            ap.HuntersPaceSpeedTimer--;
+            if (ap.HuntersPaceSpeedTimer == 0)
+                ap.HuntersPaceCurrentBonus = 0f;
         }
 
         public override void PostUpdateRunSpeeds(Player player)
         {
-            if (speedTimer <= 0)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.HuntersPaceSpeedTimer <= 0)
                 return;
 
-            player.maxRunSpeed *= 1f + currentBonus;
-            player.accRunSpeed *= 1f + currentBonus;
-            player.runAcceleration *= 1f + currentBonus;
+            player.maxRunSpeed *= 1f + ap.HuntersPaceCurrentBonus;
+            player.accRunSpeed *= 1f + ap.HuntersPaceCurrentBonus;
+            player.runAcceleration *= 1f + ap.HuntersPaceCurrentBonus;
         }
 
-        private void RefreshSpeedBonus()
+        private void RefreshSpeedBonus(Player player)
         {
-            speedTimer = SpeedDurationTicks;
-            currentBonus = SpeedBonus * HitEffectiveness;
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            ap.HuntersPaceSpeedTimer = SpeedDurationTicks;
+            ap.HuntersPaceCurrentBonus = SpeedBonus * HitEffectiveness;
         }
     }
 }

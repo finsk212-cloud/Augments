@@ -26,49 +26,44 @@ namespace Augments
         // (DuplicatesOnHitEffects is this augment's own flag), so on a crit
         // specifically, OnHitNPCWithItem/Proj below is always called exactly
         // twice. Rather than popping two separate +15s on a crit, the first
-        // call deals the full doubled amount immediately and this guard
-        // makes the second call a no-op, so a crit reads as one combined +30.
-        private bool itemProcPending;
-        private bool projProcPending;
-
-        // Not restricted by DamageClass. Built manually (instead of
-        // SimpleStrikeNPC) so the combat text can be forced to the same blue
-        // used for Iron Rhythm's popup - HideCombatText suppresses the auto
-        // popup and CombatText.NewText spawns our own, same pattern as
-        // MeteorStrikeAugment.
+        // call deals the full doubled amount immediately and the pending
+        // flag (per-player, on AugmentPlayer) makes the second call a no-op,
+        // so a crit reads as one combined +30.
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
+            var ap = player.GetModPlayer<AugmentPlayer>();
             if (!hit.Crit)
             {
                 Strike(player, target, ScaleHitEffect(ProcDamage));
                 return;
             }
 
-            if (itemProcPending)
+            if (ap.TwinStrikeItemProcPending)
             {
-                itemProcPending = false;
+                ap.TwinStrikeItemProcPending = false;
                 return;
             }
 
-            itemProcPending = true;
+            ap.TwinStrikeItemProcPending = true;
             Strike(player, target, ScaleHitEffect(ProcDamage * 2));
         }
 
         public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
         {
+            var ap = player.GetModPlayer<AugmentPlayer>();
             if (!hit.Crit)
             {
                 Strike(player, target, ScaleHitEffect(ProcDamage));
                 return;
             }
 
-            if (projProcPending)
+            if (ap.TwinStrikeProjProcPending)
             {
-                projProcPending = false;
+                ap.TwinStrikeProjProcPending = false;
                 return;
             }
 
-            projProcPending = true;
+            ap.TwinStrikeProjProcPending = true;
             Strike(player, target, ScaleHitEffect(ProcDamage * 2));
         }
 

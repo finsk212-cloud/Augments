@@ -49,6 +49,14 @@ namespace Augments
 		{
 			return HitEffectiveness >= 1f || (HitEffectiveness > 0f && Main.rand.NextFloat() < HitEffectiveness);
 		}
+
+		// Augment instances are singletons shared by every player, so per-player
+		// state lives on AugmentPlayer instead of on the augment itself. Gameplay
+		// hooks must use the `player` they receive; this accessor exists only for
+		// the parameterless display properties (StatusValue, CooldownRemaining,
+		// IsCharging, ChargeIndicatorPercent), which are read exclusively by
+		// client-side UI and therefore always describe the local player.
+		protected static AugmentPlayer LocalPlayerState => Main.LocalPlayer.GetModPlayer<AugmentPlayer>();
 		// Unique key used for saving/loading and for dupe-checking.
 		// Keep this short, lowercase, and STABLE - if you rename it later,
 		// anyone who already owns it will lose it on their next load.

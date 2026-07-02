@@ -1,4 +1,4 @@
-﻿using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Graphics;
 using Terraria;
 using Terraria.GameContent;
 using Terraria.ID;
@@ -24,22 +24,14 @@ namespace Augments
         private const int MaxStacks = 20;
         private const float BonusPerStackPercent = 0.01f;
 
-        private int hitStacks;
+        public override bool IsCharging => LocalPlayerState.MinionMomentumHitStacks > 0;
+        public override int ChargeIndicatorPercent => LocalPlayerState.MinionMomentumHitStacks;
 
-        // proj.type of the minion projectile that last landed a hit. This is
-        // the reliable signal for "which minion is currently active" - the
-        // player can swap held items freely while a minion persists, so
-        // player.HeldItem can't be used to identify it. A confirmed hit from
-        // a minion-owned projectile is the actual ground truth.
-        private int activeMinionProjType = -1;
-
-        public override bool IsCharging => hitStacks > 0;
-        public override int ChargeIndicatorPercent => hitStacks;
-
-        // Detection only - whip swings (DamageClass.Summon via OnHitNPCWithItem)
+        // Detection only - whip swings (SummonMeleeSpeed via OnHitNPCWithItem)
         // are the player tagging a target, not the minion itself attacking, so
         // they don't establish or change "current minion type". Only an actual
-        // minion-owned projectile hit does.
+        // minion-owned projectile hit does (the isMinionDamage guard below
+        // already excludes whips, which are neither minion nor MinionShot).
         public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
         {
             // proj.minion is only true for minions that damage via their own
@@ -50,17 +42,20 @@ namespace Augments
             // this is exactly why hits from those minions weren't registering.
             bool isMinionDamage = proj.minion || ProjectileID.Sets.MinionShot[proj.type];
 
-            if (proj.DamageType != DamageClass.Summon || !isMinionDamage)
+            // CountsAsClass (not ==) so modded minions whose damage class merely
+            // derives from Summon still register.
+            if (!proj.CountsAsClass(DamageClass.Summon) || !isMinionDamage)
                 return;
 
-            if (proj.type != activeMinionProjType)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (proj.type != ap.MinionMomentumActiveMinionProjType)
             {
-                activeMinionProjType = proj.type;
-                hitStacks = 0;
+                ap.MinionMomentumActiveMinionProjType = proj.type;
+                ap.MinionMomentumHitStacks = 0;
             }
 
-            if (hitStacks < MaxStacks)
-                hitStacks++;
+            if (ap.MinionMomentumHitStacks < MaxStacks)
+                ap.MinionMomentumHitStacks++;
         }
 
         // Damage application - covers both whip taps and minion hits, since
@@ -68,13 +63,13 @@ namespace Augments
         public override void ModifyHitNPCWithItem(Player player, Item item, NPC target, ref NPC.HitModifiers modifiers)
         {
             if (item.CountsAsClass(DamageClass.Summon))
-                modifiers.FlatBonusDamage += (int)(item.damage * hitStacks * BonusPerStackPercent);
+                modifiers.FlatBonusDamage += (int)(item.damage * player.GetModPlayer<AugmentPlayer>().MinionMomentumHitStacks * BonusPerStackPercent);
         }
 
         public override void ModifyHitNPCWithProj(Player player, Projectile proj, NPC target, ref NPC.HitModifiers modifiers)
         {
             if (proj.CountsAsClass(DamageClass.Summon))
-                modifiers.FlatBonusDamage += (int)(proj.damage * hitStacks * BonusPerStackPercent);
+                modifiers.FlatBonusDamage += (int)(proj.damage * player.GetModPlayer<AugmentPlayer>().MinionMomentumHitStacks * BonusPerStackPercent);
         }
     }
 }

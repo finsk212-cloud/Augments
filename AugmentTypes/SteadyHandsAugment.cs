@@ -17,38 +17,36 @@ namespace Augments
         private const int TicksPerPercent = 6;
         private const float MaxCritBonus = 20f;
 
-        private float currentCritBonus;
-        private int rampTicks;
-
-        public override bool IsCharging => currentCritBonus > 0;
-        public override int ChargeIndicatorPercent => (int)currentCritBonus;
+        public override bool IsCharging => LocalPlayerState.SteadyHandsCurrentCritBonus > 0;
+        public override int ChargeIndicatorPercent => (int)LocalPlayerState.SteadyHandsCurrentCritBonus;
 
         public override void OnUpdate(Player player)
         {
+            var ap = player.GetModPlayer<AugmentPlayer>();
             bool isStill = player.velocity.LengthSquared() < 0.01f;
 
             if (!isStill)
             {
-                currentCritBonus = 0f;
-                rampTicks = 0;
+                ap.SteadyHandsCurrentCritBonus = 0f;
+                ap.SteadyHandsRampTicks = 0;
                 return;
             }
 
-            if (currentCritBonus >= MaxCritBonus)
+            if (ap.SteadyHandsCurrentCritBonus >= MaxCritBonus)
                 return;
 
-            rampTicks++;
-            if (rampTicks >= TicksPerPercent)
+            ap.SteadyHandsRampTicks++;
+            if (ap.SteadyHandsRampTicks >= TicksPerPercent)
             {
-                rampTicks = 0;
-                currentCritBonus = System.Math.Min(currentCritBonus + 1f, MaxCritBonus);
+                ap.SteadyHandsRampTicks = 0;
+                ap.SteadyHandsCurrentCritBonus = System.Math.Min(ap.SteadyHandsCurrentCritBonus + 1f, MaxCritBonus);
             }
         }
 
         public override void ModifyWeaponCrit(Player player, Item item, ref float crit)
         {
             if (item.DamageType == DamageClass.Ranged)
-                crit += currentCritBonus;
+                crit += player.GetModPlayer<AugmentPlayer>().SteadyHandsCurrentCritBonus;
         }
     }
 }

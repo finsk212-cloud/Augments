@@ -52,8 +52,19 @@ namespace Augments
             }
         }
 
+        // Directly mutates npc.velocity, so this must only run on whichever
+        // side is authoritative for NPCs (singleplayer or the dedicated
+        // server) - same guard AugmentPlayer/SupportEffects use everywhere
+        // else. Running this on a MultiplayerClient would only touch that
+        // client's local prediction copy of the NPC, which the next NPC sync
+        // packet from the server immediately overwrites - the pull would
+        // never actually take effect for anyone, same bug ShockwaveAugment
+        // had before it switched to SimpleStrikeNPC.
         private void PullNearbyEnemies()
         {
+            if (Main.netMode == NetmodeID.MultiplayerClient)
+                return;
+
             foreach (NPC npc in Main.npc)
             {
                 if (!npc.active || npc.friendly || npc.townNPC || npc.dontTakeDamage)

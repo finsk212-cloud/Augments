@@ -17,49 +17,49 @@ namespace Augments
         private const int MaxStacks = 3;
         private const float MovementSpeedPerStack = 0.08f;
 
-        private int timer;
-        private int stacks;
-
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
             if (target.life <= 0 && PassesHitEffectivenessRoll())
-                TriggerEffect();
+                TriggerEffect(player);
         }
 
         public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
         {
             if (target.life <= 0 && PassesHitEffectivenessRoll())
-                TriggerEffect();
+                TriggerEffect(player);
         }
 
         public override void OnUpdate(Player player)
         {
-            if (timer <= 0)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.GetExcitedTimer <= 0)
                 return;
 
-            timer--;
+            ap.GetExcitedTimer--;
 
-            if (timer == 0)
-                stacks = 0;
+            if (ap.GetExcitedTimer == 0)
+                ap.GetExcitedStacks = 0;
         }
 
         public override void PostUpdateRunSpeeds(Player player)
         {
-            if (timer <= 0)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.GetExcitedTimer <= 0)
                 return;
 
-            float bonus = MovementSpeedPerStack * stacks;
+            float bonus = MovementSpeedPerStack * ap.GetExcitedStacks;
             player.maxRunSpeed *= 1f + bonus;
             player.accRunSpeed *= 1f + bonus;
             player.runAcceleration *= 1f + bonus;
         }
 
-        private void TriggerEffect()
+        private static void TriggerEffect(Player player)
         {
-            if (stacks < MaxStacks)
-                stacks++;
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.GetExcitedStacks < MaxStacks)
+                ap.GetExcitedStacks++;
 
-            timer = DurationTicks;
+            ap.GetExcitedTimer = DurationTicks;
         }
     }
 }

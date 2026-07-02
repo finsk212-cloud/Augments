@@ -17,29 +17,27 @@ namespace Augments
 
         public override AugmentRarity Rarity => AugmentRarity.Legendary;
         public override AugmentClass Class => AugmentClass.Magic;
-        public override bool IsCharging => corruption > 0 || manaProgress > 0;
-        public override int ChargeIndicatorPercent => corruption * 10 + manaProgress;
+        public override bool IsCharging => LocalPlayerState.EldritchCovenantCorruption > 0 || LocalPlayerState.EldritchCovenantManaProgress > 0;
+        public override int ChargeIndicatorPercent => LocalPlayerState.EldritchCovenantCorruption * 10 + LocalPlayerState.EldritchCovenantManaProgress;
         public override Texture2D Icon => TextureAssets.Projectile[ProjectileID.PhantasmalEye].Value;
 
         private const int ManaPerCorruption = 10;
         private const int MaxCorruption = 10;
         private const int LaserDamage = 40;
 
-        private int corruption;
-        private int manaProgress;
-
         public override void OnConsumeMana(Player player, Item item, int manaConsumed)
         {
-            if (corruption >= MaxCorruption || manaConsumed <= 0)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.EldritchCovenantCorruption >= MaxCorruption || manaConsumed <= 0)
                 return;
 
-            manaProgress += manaConsumed;
-            int corruptionGained = manaProgress / ManaPerCorruption;
-            manaProgress %= ManaPerCorruption;
-            corruption = Math.Min(MaxCorruption, corruption + corruptionGained);
+            ap.EldritchCovenantManaProgress += manaConsumed;
+            int corruptionGained = ap.EldritchCovenantManaProgress / ManaPerCorruption;
+            ap.EldritchCovenantManaProgress %= ManaPerCorruption;
+            ap.EldritchCovenantCorruption = Math.Min(MaxCorruption, ap.EldritchCovenantCorruption + corruptionGained);
 
-            if (corruption >= MaxCorruption)
-                manaProgress = 0;
+            if (ap.EldritchCovenantCorruption >= MaxCorruption)
+                ap.EldritchCovenantManaProgress = 0;
         }
 
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
@@ -56,10 +54,11 @@ namespace Augments
 
         private void TryOpenEye(Player player, NPC target)
         {
-            if (corruption < MaxCorruption)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.EldritchCovenantCorruption < MaxCorruption)
                 return;
 
-            corruption = 0;
+            ap.EldritchCovenantCorruption = 0;
             Projectile.NewProjectile(
                 player.GetSource_FromThis(),
                 target.Center + new Vector2(0f, -80f),

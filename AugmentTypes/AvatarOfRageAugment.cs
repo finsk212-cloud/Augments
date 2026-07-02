@@ -31,20 +31,19 @@ namespace Augments
             modifiers.FlatBonusDamage += (int)(proj.damage * (1f - player.statLife / (float)player.statLifeMax2) * MaxBonusDamagePercent);
         }
 
-        private int lastLife = -1;
-
         // Same tick-over-tick statLife comparison VitalEchoAugment uses to
         // catch ANY heal regardless of source - here, instead of reacting to
         // the increase, any increase that would cross the 50% cap gets
         // clamped back down to exactly the cap.
         public override void OnUpdate(Player player)
         {
+            var ap = player.GetModPlayer<AugmentPlayer>();
             int healCap = (int)(player.statLifeMax2 * HealCapPercent);
 
-            if (lastLife != -1 && player.statLife > lastLife && player.statLife > healCap)
+            if (ap.AvatarOfRageLastLife != -1 && player.statLife > ap.AvatarOfRageLastLife && player.statLife > healCap)
                 player.statLife = healCap;
 
-            lastLife = player.statLife;
+            ap.AvatarOfRageLastLife = player.statLife;
         }
     }
 }

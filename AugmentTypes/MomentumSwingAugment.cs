@@ -1,4 +1,4 @@
-﻿using Terraria;
+using Terraria;
 using Terraria.ModLoader;
 
 namespace Augments
@@ -19,51 +19,49 @@ namespace Augments
         private const int MaxStacks = 5;
         private const float BonusPerStackPercent = 0.03f;
 
-        private int lastTargetWhoAmI = -1;
-        private int stacks;
-        private int resetTimer;
-
         public override void OnUpdate(Player player)
         {
-            if (resetTimer <= 0)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.MomentumSwingResetTimer <= 0)
                 return;
 
-            resetTimer--;
-            if (resetTimer == 0)
+            ap.MomentumSwingResetTimer--;
+            if (ap.MomentumSwingResetTimer == 0)
             {
-                stacks = 0;
-                lastTargetWhoAmI = -1;
+                ap.MomentumSwingStacks = 0;
+                ap.MomentumSwingLastTargetWhoAmI = -1;
             }
         }
 
         public override void ModifyHitNPCWithItem(Player player, Item item, NPC target, ref NPC.HitModifiers modifiers)
         {
             if (item.CountsAsClass(DamageClass.Melee))
-                ApplyStack(ref modifiers, target, item.damage);
+                ApplyStack(player, ref modifiers, target, item.damage);
         }
 
         public override void ModifyHitNPCWithProj(Player player, Projectile proj, NPC target, ref NPC.HitModifiers modifiers)
         {
             if (proj.CountsAsClass(DamageClass.Melee))
-                ApplyStack(ref modifiers, target, proj.damage);
+                ApplyStack(player, ref modifiers, target, proj.damage);
         }
 
-        private void ApplyStack(ref NPC.HitModifiers modifiers, NPC target, int baseDamage)
+        private static void ApplyStack(Player player, ref NPC.HitModifiers modifiers, NPC target, int baseDamage)
         {
-            if (target.whoAmI == lastTargetWhoAmI && resetTimer > 0)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (target.whoAmI == ap.MomentumSwingLastTargetWhoAmI && ap.MomentumSwingResetTimer > 0)
             {
-                if (stacks < MaxStacks)
-                    stacks++;
+                if (ap.MomentumSwingStacks < MaxStacks)
+                    ap.MomentumSwingStacks++;
             }
             else
             {
-                stacks = 1;
-                lastTargetWhoAmI = target.whoAmI;
+                ap.MomentumSwingStacks = 1;
+                ap.MomentumSwingLastTargetWhoAmI = target.whoAmI;
             }
 
-            resetTimer = ResetWindowTicks;
+            ap.MomentumSwingResetTimer = ResetWindowTicks;
 
-            float bonusPercent = stacks * BonusPerStackPercent;
+            float bonusPercent = ap.MomentumSwingStacks * BonusPerStackPercent;
             modifiers.FlatBonusDamage += (int)(baseDamage * bonusPercent);
         }
     }

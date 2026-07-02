@@ -16,8 +16,6 @@ namespace Augments
         private const float DodgeChance = 0.15f;
         private const int InvulnerabilityTicks = 80;
 
-        private int invulnTicksRemaining;
-
         // FreeDodge negates the hit itself, but its own follow-up invuln
         // window isn't reliable - same lesson as the earlier Cancel() bug.
         // Manually drive the invuln window instead, the same way
@@ -29,18 +27,19 @@ namespace Augments
             bool result = Main.rand.NextFloat() < DodgeChance;
 
             if (result)
-                invulnTicksRemaining = InvulnerabilityTicks;
+                player.GetModPlayer<AugmentPlayer>().MirrorImageInvulnTicks = InvulnerabilityTicks;
 
             return result;
         }
 
         public override void OnUpdate(Player player)
         {
-            if (invulnTicksRemaining > 0)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.MirrorImageInvulnTicks > 0)
             {
                 player.immune = true;
-                player.immuneTime = invulnTicksRemaining;
-                invulnTicksRemaining--;
+                player.immuneTime = ap.MirrorImageInvulnTicks;
+                ap.MirrorImageInvulnTicks--;
             }
         }
     }

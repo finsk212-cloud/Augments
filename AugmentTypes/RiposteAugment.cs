@@ -1,4 +1,4 @@
-﻿using Terraria;
+using Terraria;
 using Terraria.ModLoader;
 
 namespace Augments
@@ -17,35 +17,34 @@ namespace Augments
         private const int WindowTicks = 120;
         private const float BonusDamagePercent = 0.20f;
 
-        private int windowRemaining;
-
         public override void OnHurt(Player player, Player.HurtInfo info)
         {
-            windowRemaining = WindowTicks;
+            player.GetModPlayer<AugmentPlayer>().RiposteWindowRemaining = WindowTicks;
         }
 
         public override void OnUpdate(Player player)
         {
-            if (windowRemaining > 0)
-                windowRemaining--;
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.RiposteWindowRemaining > 0)
+                ap.RiposteWindowRemaining--;
         }
 
         public override void ModifyHitNPCWithItem(Player player, Item item, NPC target, ref NPC.HitModifiers modifiers)
         {
-            if (windowRemaining > 0 && item.CountsAsClass(DamageClass.Melee))
-                Consume(ref modifiers, item.damage);
+            if (player.GetModPlayer<AugmentPlayer>().RiposteWindowRemaining > 0 && item.CountsAsClass(DamageClass.Melee))
+                Consume(player, ref modifiers, item.damage);
         }
 
         public override void ModifyHitNPCWithProj(Player player, Projectile proj, NPC target, ref NPC.HitModifiers modifiers)
         {
-            if (windowRemaining > 0 && proj.CountsAsClass(DamageClass.Melee))
-                Consume(ref modifiers, proj.damage);
+            if (player.GetModPlayer<AugmentPlayer>().RiposteWindowRemaining > 0 && proj.CountsAsClass(DamageClass.Melee))
+                Consume(player, ref modifiers, proj.damage);
         }
 
-        private void Consume(ref NPC.HitModifiers modifiers, int baseDamage)
+        private static void Consume(Player player, ref NPC.HitModifiers modifiers, int baseDamage)
         {
             modifiers.FlatBonusDamage += (int)(baseDamage * BonusDamagePercent);
-            windowRemaining = 0;
+            player.GetModPlayer<AugmentPlayer>().RiposteWindowRemaining = 0;
         }
     }
 }

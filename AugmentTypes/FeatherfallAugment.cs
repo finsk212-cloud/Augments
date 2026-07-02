@@ -18,8 +18,6 @@ namespace Augments
         private const int SpeedBurstDurationTicks = 120;
         private const float SpeedBurstBonus = 0.3f;
 
-        private int speedBurstTicksRemaining;
-
         // No dedicated "this damage was fall damage" flag exists anywhere -
         // confirmed by inspecting both PlayerDeathReason and HurtModifiers
         // directly. PlayerDeathReason only exposes specific Player/NPC/
@@ -42,13 +40,14 @@ namespace Augments
                 return;
 
             modifiers.FinalDamage *= 1f - FallDamageReductionPercent;
-            speedBurstTicksRemaining = SpeedBurstDurationTicks;
+            player.GetModPlayer<AugmentPlayer>().FeatherfallSpeedBurstTicks = SpeedBurstDurationTicks;
         }
 
         public override void OnUpdate(Player player)
         {
-            if (speedBurstTicksRemaining > 0)
-                speedBurstTicksRemaining--;
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.FeatherfallSpeedBurstTicks > 0)
+                ap.FeatherfallSpeedBurstTicks--;
         }
 
         // Same PostUpdateRunSpeeds pattern Fight or Flight already uses -
@@ -56,7 +55,7 @@ namespace Augments
         // scratch every frame and have to be multiplied here to actually stick.
         public override void PostUpdateRunSpeeds(Player player)
         {
-            if (speedBurstTicksRemaining <= 0)
+            if (player.GetModPlayer<AugmentPlayer>().FeatherfallSpeedBurstTicks <= 0)
                 return;
 
             player.maxRunSpeed *= 1f + SpeedBurstBonus;

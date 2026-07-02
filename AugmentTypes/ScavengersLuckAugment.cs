@@ -21,12 +21,10 @@ namespace Augments
         private const int BuffDurationTicks = 300;
         private const float CritBonus = 15f;
 
-        private int buffTicksRemaining;
-
         // Shows "+15%" in the cooldown/status row while the crit buff is
         // active, same StatusValue mechanism AdaptiveArmorAugment uses for
         // its growing defense bonus.
-        public override int? StatusValue => buffTicksRemaining > 0 ? (int)CritBonus : (int?)null;
+        public override int? StatusValue => LocalPlayerState.ScavengersLuckBuffTicks > 0 ? (int)CritBonus : (int?)null;
         public override Color StatusValueColor => AugmentTextColors.Crit;
         public override string StatusValueSuffix => "%";
 
@@ -38,18 +36,19 @@ namespace Augments
         public override void OnKillNPC(Player player, NPC npc)
         {
             if (Main.rand.NextFloat() < ProcChance * (1f + player.GetModPlayer<AugmentPlayer>().TotalFortune))
-                buffTicksRemaining = BuffDurationTicks;
+                player.GetModPlayer<AugmentPlayer>().ScavengersLuckBuffTicks = BuffDurationTicks;
         }
 
         public override void OnUpdate(Player player)
         {
-            if (buffTicksRemaining > 0)
-                buffTicksRemaining--;
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.ScavengersLuckBuffTicks > 0)
+                ap.ScavengersLuckBuffTicks--;
         }
 
         public override void ModifyWeaponCrit(Player player, Item item, ref float crit)
         {
-            if (buffTicksRemaining > 0)
+            if (player.GetModPlayer<AugmentPlayer>().ScavengersLuckBuffTicks > 0)
                 crit += CritBonus;
         }
     }

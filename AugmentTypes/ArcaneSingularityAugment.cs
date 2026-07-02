@@ -19,8 +19,6 @@ namespace Augments
         private const int HitsToCharge = 8;
         private const int VortexDamage = 20;
 
-        private float charge;
-
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
             if (item.DamageType == DamageClass.Magic)
@@ -35,9 +33,10 @@ namespace Augments
 
         private void RegisterMagicHit(Player player, NPC target)
         {
-            if (charge >= HitsToCharge)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.ArcaneSingularityCharge >= HitsToCharge)
             {
-                charge = 0;
+                ap.ArcaneSingularityCharge = 0;
                 Projectile.NewProjectile(
                     player.GetSource_FromThis(),
                     target.Center,
@@ -50,7 +49,7 @@ namespace Augments
                 return;
             }
 
-            charge += HitEffectiveness;
+            ap.ArcaneSingularityCharge += HitEffectiveness;
         }
     }
 }

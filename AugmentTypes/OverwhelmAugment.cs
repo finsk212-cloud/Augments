@@ -1,4 +1,4 @@
-﻿using Terraria;
+using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
 
@@ -19,48 +19,46 @@ namespace Augments
         private const int ConfusedDurationTicks = 60;
         private const int HitsToTrigger = 3;
 
-        private int lastTargetWhoAmI = -1;
-        private int hitCounter;
-        private int resetTimer;
-
         public override void OnUpdate(Player player)
         {
-            if (resetTimer <= 0)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.OverwhelmResetTimer <= 0)
                 return;
 
-            resetTimer--;
-            if (resetTimer == 0)
+            ap.OverwhelmResetTimer--;
+            if (ap.OverwhelmResetTimer == 0)
             {
-                hitCounter = 0;
-                lastTargetWhoAmI = -1;
+                ap.OverwhelmHitCounter = 0;
+                ap.OverwhelmLastTargetWhoAmI = -1;
             }
         }
 
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
             if (item.CountsAsClass(DamageClass.Melee))
-                RegisterHit(target);
+                RegisterHit(player, target);
         }
 
         public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
         {
             if (proj.CountsAsClass(DamageClass.Melee))
-                RegisterHit(target);
+                RegisterHit(player, target);
         }
 
-        private void RegisterHit(NPC target)
+        private static void RegisterHit(Player player, NPC target)
         {
-            if (target.whoAmI == lastTargetWhoAmI && resetTimer > 0)
-                hitCounter++;
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (target.whoAmI == ap.OverwhelmLastTargetWhoAmI && ap.OverwhelmResetTimer > 0)
+                ap.OverwhelmHitCounter++;
             else
             {
-                hitCounter = 1;
-                lastTargetWhoAmI = target.whoAmI;
+                ap.OverwhelmHitCounter = 1;
+                ap.OverwhelmLastTargetWhoAmI = target.whoAmI;
             }
 
-            resetTimer = ResetWindowTicks;
+            ap.OverwhelmResetTimer = ResetWindowTicks;
 
-            if (hitCounter % HitsToTrigger == 0)
+            if (ap.OverwhelmHitCounter % HitsToTrigger == 0)
                 target.AddBuff(BuffID.Confused, ConfusedDurationTicks);
         }
     }

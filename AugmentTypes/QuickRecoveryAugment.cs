@@ -17,21 +17,20 @@ namespace Augments
         private const int HealIntervalTicks = 60;
         private const int HealAmount = 2;
 
-        private int regenTimer;
-
         public override void OnHurt(Player player, Player.HurtInfo info)
         {
-            regenTimer = RegenDurationTicks;
+            player.GetModPlayer<AugmentPlayer>().QuickRecoveryRegenTimer = RegenDurationTicks;
         }
 
         public override void OnUpdate(Player player)
         {
-            if (regenTimer <= 0)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.QuickRecoveryRegenTimer <= 0)
                 return;
 
-            regenTimer--;
+            ap.QuickRecoveryRegenTimer--;
 
-            if (regenTimer % HealIntervalTicks == 0)
+            if (ap.QuickRecoveryRegenTimer % HealIntervalTicks == 0)
             {
                 player.statLife = Math.Min(player.statLife + HealAmount, player.statLifeMax2);
                 player.HealEffect(HealAmount);

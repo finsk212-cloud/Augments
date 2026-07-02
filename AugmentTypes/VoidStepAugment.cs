@@ -19,10 +19,6 @@ namespace Augments
         private const int ResetWindowTicks = 240;
         private const int InvulnerabilityTicks = 80;
 
-        private int killStacks;
-        private int resetTimer;
-        private int invulnTicksRemaining;
-
         // Shows "+X%" in the cooldown/status row while stacks are active,
         // same StatusValue mechanism ScavengersLuckAugment uses for its crit
         // buff - no dedicated "dodge" color category exists yet, so this
@@ -30,7 +26,7 @@ namespace Augments
         // Round rather than truncate - float imprecision on DodgeChancePerStack
         // (0.02f isn't exact in binary) otherwise lands at 10 stacks as
         // 19.999998 instead of 20, and (int) truncation would display "19%".
-        public override int? StatusValue => killStacks > 0 ? (int)System.Math.Round(killStacks * DodgeChancePerStack * 100f) : (int?)null;
+        public override int? StatusValue => LocalPlayerState.VoidStepKillStacks > 0 ? (int)System.Math.Round(LocalPlayerState.VoidStepKillStacks * DodgeChancePerStack * 100f) : (int?)null;
         public override string StatusValueSuffix => "%";
 
         // Hooking kill credit (see AugmentGlobalNPC.OnKill, keyed off
@@ -40,19 +36,21 @@ namespace Augments
         // restriction here, so any kill builds a stack.
         public override void OnKillNPC(Player player, NPC npc)
         {
-            if (killStacks < MaxStacks)
-                killStacks++;
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.VoidStepKillStacks < MaxStacks)
+                ap.VoidStepKillStacks++;
 
-            resetTimer = ResetWindowTicks;
+            ap.VoidStepResetTimer = ResetWindowTicks;
         }
 
         public override void OnUpdate(Player player)
         {
-            if (resetTimer > 0)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.VoidStepResetTimer > 0)
             {
-                resetTimer--;
-                if (resetTimer == 0)
-                    killStacks = 0;
+                ap.VoidStepResetTimer--;
+                if (ap.VoidStepResetTimer == 0)
+                    ap.VoidStepKillStacks = 0;
             }
 
             // FreeDodge negates the hit itself, but its own follow-up invuln
@@ -60,20 +58,21 @@ namespace Augments
             // learned. Manually drive the invuln window instead: re-force
             // player.immune/immuneTime every tick for the full duration
             // rather than setting it once and trusting it to survive.
-            if (invulnTicksRemaining > 0)
+            if (ap.VoidStepInvulnTicks > 0)
             {
                 player.immune = true;
-                player.immuneTime = invulnTicksRemaining;
-                invulnTicksRemaining--;
+                player.immuneTime = ap.VoidStepInvulnTicks;
+                ap.VoidStepInvulnTicks--;
             }
         }
 
         public override bool FreeDodge(Player player, Player.HurtInfo info)
         {
-            bool result = Main.rand.NextFloat() < killStacks * DodgeChancePerStack;
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            bool result = Main.rand.NextFloat() < ap.VoidStepKillStacks * DodgeChancePerStack;
 
             if (result)
-                invulnTicksRemaining = InvulnerabilityTicks;
+                ap.VoidStepInvulnTicks = InvulnerabilityTicks;
 
             return result;
         }

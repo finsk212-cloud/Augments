@@ -16,39 +16,39 @@ namespace Augments
         private const int CooldownTicks = 10800;
         private const int InvulnerabilityTicks = 120;
 
-        private int cooldownRemaining;
-        private bool armedThisHit;
-
-        public override int CooldownRemaining => cooldownRemaining;
+        public override int CooldownRemaining => LocalPlayerState.LastStandCooldown;
 
         public override void OnUpdate(Player player)
         {
-            if (cooldownRemaining > 0)
-                cooldownRemaining--;
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.LastStandCooldown > 0)
+                ap.LastStandCooldown--;
         }
 
         public override void ModifyHurt(Player player, ref Player.HurtModifiers modifiers)
         {
-            armedThisHit = false;
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            ap.LastStandArmedThisHit = false;
 
-            if (cooldownRemaining > 0 || player.statLife <= 1)
+            if (ap.LastStandCooldown > 0 || player.statLife <= 1)
                 return;
 
             modifiers.SetMaxDamage(player.statLife - 1);
-            armedThisHit = true;
+            ap.LastStandArmedThisHit = true;
         }
 
         public override void OnHurt(Player player, Player.HurtInfo info)
         {
-            if (!armedThisHit)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (!ap.LastStandArmedThisHit)
                 return;
 
-            armedThisHit = false;
+            ap.LastStandArmedThisHit = false;
 
             if (info.Damage != player.statLife - 1)
                 return;
 
-            cooldownRemaining = CooldownTicks;
+            ap.LastStandCooldown = CooldownTicks;
             player.immune = true;
             player.immuneTime = InvulnerabilityTicks;
         }

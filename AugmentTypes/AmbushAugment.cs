@@ -1,4 +1,4 @@
-﻿using Terraria;
+using Terraria;
 using Terraria.ModLoader;
 
 namespace Augments
@@ -17,47 +17,48 @@ namespace Augments
         private const int StillTicksRequired = 120;
         private const float BonusDamagePercent = 0.25f;
 
-        private int stillTicks;
-        private bool ready;
-
         public override void OnUpdate(Player player)
         {
+            var ap = player.GetModPlayer<AugmentPlayer>();
             bool isStill = player.velocity.LengthSquared() < 0.01f;
 
             if (!isStill)
             {
-                stillTicks = 0;
+                ap.AmbushStillTicks = 0;
                 return;
             }
 
-            if (ready)
+            if (ap.AmbushReady)
                 return;
 
-            stillTicks++;
-            if (stillTicks == StillTicksRequired)
+            ap.AmbushStillTicks++;
+            if (ap.AmbushStillTicks == StillTicksRequired)
             {
-                ready = true;
-                Main.NewText("Ambush primed!", 200, 200, 255);
+                ap.AmbushReady = true;
+                // "Primed" popup is a local-feedback message for the owner only.
+                if (player.whoAmI == Main.myPlayer)
+                    Main.NewText("Ambush primed!", 200, 200, 255);
             }
         }
 
         public override void ModifyHitNPCWithItem(Player player, Item item, NPC target, ref NPC.HitModifiers modifiers)
         {
-            if (ready && item.CountsAsClass(DamageClass.Melee))
-                Consume(ref modifiers, item.damage);
+            if (player.GetModPlayer<AugmentPlayer>().AmbushReady && item.CountsAsClass(DamageClass.Melee))
+                Consume(player, ref modifiers, item.damage);
         }
 
         public override void ModifyHitNPCWithProj(Player player, Projectile proj, NPC target, ref NPC.HitModifiers modifiers)
         {
-            if (ready && proj.CountsAsClass(DamageClass.Melee))
-                Consume(ref modifiers, proj.damage);
+            if (player.GetModPlayer<AugmentPlayer>().AmbushReady && proj.CountsAsClass(DamageClass.Melee))
+                Consume(player, ref modifiers, proj.damage);
         }
 
-        private void Consume(ref NPC.HitModifiers modifiers, int baseDamage)
+        private static void Consume(Player player, ref NPC.HitModifiers modifiers, int baseDamage)
         {
+            var ap = player.GetModPlayer<AugmentPlayer>();
             modifiers.FlatBonusDamage += (int)(baseDamage * BonusDamagePercent);
-            ready = false;
-            stillTicks = 0;
+            ap.AmbushReady = false;
+            ap.AmbushStillTicks = 0;
         }
     }
 }

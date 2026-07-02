@@ -17,32 +17,31 @@ namespace Augments
         private const int CooldownTicks = 1800;
         private const int DefenseBonus = 8;
 
-        private int durationRemaining;
-        private int cooldownRemaining;
-
-        public override int CooldownRemaining => cooldownRemaining;
+        public override int CooldownRemaining => LocalPlayerState.IronWillCooldown;
 
         public override void OnHurt(Player player, Player.HurtInfo info)
         {
-            if (cooldownRemaining > 0)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.IronWillCooldown > 0)
                 return;
 
-            durationRemaining = DurationTicks;
-            cooldownRemaining = CooldownTicks;
+            ap.IronWillDurationRemaining = DurationTicks;
+            ap.IronWillCooldown = CooldownTicks;
         }
 
         public override void OnUpdate(Player player)
         {
-            if (cooldownRemaining > 0)
-                cooldownRemaining--;
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.IronWillCooldown > 0)
+                ap.IronWillCooldown--;
 
-            if (durationRemaining > 0)
-                durationRemaining--;
+            if (ap.IronWillDurationRemaining > 0)
+                ap.IronWillDurationRemaining--;
         }
 
         public override void UpdateEquips(Player player)
         {
-            if (durationRemaining > 0)
+            if (player.GetModPlayer<AugmentPlayer>().IronWillDurationRemaining > 0)
                 player.statDefense += DefenseBonus;
         }
     }

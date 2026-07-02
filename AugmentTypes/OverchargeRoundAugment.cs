@@ -20,17 +20,15 @@ namespace Augments
         private const int BaseDamage = 5;
         private const int DamagePerStack = 3;
 
-        private float hitStacks;
-        private int resetTimer;
-
         public override void OnUpdate(Player player)
         {
-            if (resetTimer <= 0)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.OverchargeRoundResetTimer <= 0)
                 return;
 
-            resetTimer--;
-            if (resetTimer == 0)
-                hitStacks = 0;
+            ap.OverchargeRoundResetTimer--;
+            if (ap.OverchargeRoundResetTimer == 0)
+                ap.OverchargeRoundHitStacks = 0;
         }
 
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
@@ -47,19 +45,20 @@ namespace Augments
 
         private void ApplyStack(Player player, NPC target)
         {
-            if (resetTimer > 0)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.OverchargeRoundResetTimer > 0)
             {
-                if (hitStacks < MaxStacks)
-                    hitStacks += HitEffectiveness;
+                if (ap.OverchargeRoundHitStacks < MaxStacks)
+                    ap.OverchargeRoundHitStacks += HitEffectiveness;
             }
             else
             {
-                hitStacks = HitEffectiveness;
+                ap.OverchargeRoundHitStacks = HitEffectiveness;
             }
 
-            resetTimer = ResetWindowTicks;
+            ap.OverchargeRoundResetTimer = ResetWindowTicks;
 
-            int damage = (int)((BaseDamage + hitStacks * DamagePerStack) * HitEffectiveness);
+            int damage = (int)((BaseDamage + ap.OverchargeRoundHitStacks * DamagePerStack) * HitEffectiveness);
             Strike(player, target, System.Math.Max(1, damage));
         }
 

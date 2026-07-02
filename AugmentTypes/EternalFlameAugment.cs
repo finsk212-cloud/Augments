@@ -36,12 +36,11 @@ namespace Augments
             BuffID.Burning
         };
 
-        private int boostTicksRemaining;
-
         public override void OnUpdate(Player player)
         {
-            if (boostTicksRemaining > 0)
-                boostTicksRemaining--;
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.EternalFlameBoostTicks > 0)
+                ap.EternalFlameBoostTicks--;
 
             for (int i = 0; i < player.buffType.Length; i++)
             {
@@ -49,20 +48,20 @@ namespace Augments
                     continue;
 
                 player.DelBuff(i);
-                boostTicksRemaining = BoostDurationTicks;
+                ap.EternalFlameBoostTicks = BoostDurationTicks;
                 break;
             }
         }
 
         public override void ModifyHitNPCWithItem(Player player, Item item, NPC target, ref NPC.HitModifiers modifiers)
         {
-            if (boostTicksRemaining > 0 && item.DamageType == DamageClass.Magic)
+            if (player.GetModPlayer<AugmentPlayer>().EternalFlameBoostTicks > 0 && item.DamageType == DamageClass.Magic)
                 modifiers.FlatBonusDamage += (int)(item.damage * BonusDamagePercent);
         }
 
         public override void ModifyHitNPCWithProj(Player player, Projectile proj, NPC target, ref NPC.HitModifiers modifiers)
         {
-            if (boostTicksRemaining > 0 && proj.DamageType == DamageClass.Magic)
+            if (player.GetModPlayer<AugmentPlayer>().EternalFlameBoostTicks > 0 && proj.DamageType == DamageClass.Magic)
                 modifiers.FlatBonusDamage += (int)(proj.damage * BonusDamagePercent);
         }
     }

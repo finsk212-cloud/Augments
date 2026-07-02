@@ -16,9 +16,6 @@ namespace Augments
         private const int DurationTicks = 240;
         private const float SpeedBonus = 0.25f;
 
-        private bool wasGrappling;
-        private int speedBurstTicksRemaining;
-
         // player.grapCount is reset to 0 during the player's own update phase and
         // re-incremented by grapple projectiles later in the frame, so it reads as 0
         // here inside PostUpdate regardless of actual grapple state. Scanning
@@ -37,21 +34,22 @@ namespace Augments
 
         public override void OnUpdate(Player player)
         {
+            var ap = player.GetModPlayer<AugmentPlayer>();
             bool isGrappling = PlayerHasActiveHook(player);
 
-            if (wasGrappling && !isGrappling)
-                speedBurstTicksRemaining = DurationTicks;
+            if (ap.GrappleMasterWasGrappling && !isGrappling)
+                ap.GrappleMasterSpeedBurstTicks = DurationTicks;
 
-            wasGrappling = isGrappling;
+            ap.GrappleMasterWasGrappling = isGrappling;
 
-            if (speedBurstTicksRemaining > 0)
-                speedBurstTicksRemaining--;
+            if (ap.GrappleMasterSpeedBurstTicks > 0)
+                ap.GrappleMasterSpeedBurstTicks--;
         }
 
         // Same PostUpdateRunSpeeds pattern FightOrFlightAugment uses.
         public override void PostUpdateRunSpeeds(Player player)
         {
-            if (speedBurstTicksRemaining <= 0)
+            if (player.GetModPlayer<AugmentPlayer>().GrappleMasterSpeedBurstTicks <= 0)
                 return;
 
             player.maxRunSpeed *= 1f + SpeedBonus;

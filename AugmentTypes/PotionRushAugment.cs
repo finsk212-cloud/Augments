@@ -14,27 +14,26 @@ namespace Augments
 
         private const int DurationTicks = 240;
 
-        private int timer;
-
         public override void OnConsumeItem(Player player, Item item)
         {
             if (item.healLife > 0)
             {
-                timer = DurationTicks;
+                player.GetModPlayer<AugmentPlayer>().PotionRushTimer = DurationTicks;
             }
         }
 
         public override void OnUpdate(Player player)
         {
-            if (timer <= 0)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.PotionRushTimer <= 0)
                 return;
 
-            timer--;
+            ap.PotionRushTimer--;
         }
 
         public override void PostUpdateRunSpeeds(Player player)
         {
-            if (timer <= 0)
+            if (player.GetModPlayer<AugmentPlayer>().PotionRushTimer <= 0)
                 return;
 
             player.maxRunSpeed *= 1.10f;

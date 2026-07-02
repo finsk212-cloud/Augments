@@ -20,44 +20,42 @@ namespace Augments
         private const float BurstRange = 200f;
         private const int BurstDamage = 100;
 
-        private int chargeStacks;
-        private int resetTimer;
-
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
             if (item.DamageType == DamageClass.Magic)
-                HandleHit(target);
+                HandleHit(player, target);
         }
 
         public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
         {
             if (proj.DamageType == DamageClass.Magic)
-                HandleHit(target);
+                HandleHit(player, target);
         }
 
         // Same "next hit after reaching the cap triggers, then resets" shape
         // as ApexHunterAugment - check the threshold from BEFORE this hit
         // first, so the hit that brings the count to 8 just finishes
         // charging, and it's the hit after that releases the burst.
-        private void HandleHit(NPC target)
+        private static void HandleHit(Player player, NPC target)
         {
-            bool triggers = chargeStacks >= MaxChargeStacks;
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            bool triggers = ap.InfernosHeartChargeStacks >= MaxChargeStacks;
 
             if (triggers)
             {
-                chargeStacks = 0;
+                ap.InfernosHeartChargeStacks = 0;
             }
-            else if (resetTimer > 0)
+            else if (ap.InfernosHeartResetTimer > 0)
             {
-                if (chargeStacks < MaxChargeStacks)
-                    chargeStacks++;
+                if (ap.InfernosHeartChargeStacks < MaxChargeStacks)
+                    ap.InfernosHeartChargeStacks++;
             }
             else
             {
-                chargeStacks = 1;
+                ap.InfernosHeartChargeStacks = 1;
             }
 
-            resetTimer = ResetWindowTicks;
+            ap.InfernosHeartResetTimer = ResetWindowTicks;
 
             if (triggers)
                 Burst(target);
@@ -65,12 +63,13 @@ namespace Augments
 
         public override void OnUpdate(Player player)
         {
-            if (resetTimer <= 0)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.InfernosHeartResetTimer <= 0)
                 return;
 
-            resetTimer--;
-            if (resetTimer == 0)
-                chargeStacks = 0;
+            ap.InfernosHeartResetTimer--;
+            if (ap.InfernosHeartResetTimer == 0)
+                ap.InfernosHeartChargeStacks = 0;
         }
 
         // Uncapped nearby-enemy search - same shape as

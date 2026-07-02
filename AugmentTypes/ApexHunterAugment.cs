@@ -18,10 +18,9 @@ namespace Augments
         private const int MaxMarkStacks = 10;
         private const float BurstPercentOfMaxHP = 0.15f;
 
-        // Tracked per-player (this augment instance), not per-target - the
-        // mark only ever matters against whichever single boss is currently
-        // being fought, so there's no need to key it by target.whoAmI.
-        private float markStacks;
+        // Tracked per-player (on AugmentPlayer), not per-target - the mark only
+        // ever matters against whichever single boss is currently being fought,
+        // so there's no need to key it by target.whoAmI.
 
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
@@ -37,14 +36,15 @@ namespace Augments
 
         private void HandleMark(Player player, NPC target)
         {
-            if (markStacks >= MaxMarkStacks)
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.ApexHunterMarkStacks >= MaxMarkStacks)
             {
-                markStacks = 0;
+                ap.ApexHunterMarkStacks = 0;
                 Strike(player, target, HitEffectiveness);
             }
             else
             {
-                markStacks += HitEffectiveness;
+                ap.ApexHunterMarkStacks += HitEffectiveness;
             }
         }
 

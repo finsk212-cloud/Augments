@@ -24,23 +24,21 @@ namespace Augments
         private const int DurationTicks = 180;
         private const float IncomingDamageReductionPercent = 0.25f;
 
-        private int cooldownRemaining;
-        private int durationRemaining;
-
-        public override int CooldownRemaining => cooldownRemaining;
+        public override int CooldownRemaining => LocalPlayerState.PiedPiperCooldown;
 
         public override void OnUpdate(Player player)
         {
-            if (cooldownRemaining > 0)
-                cooldownRemaining--;
+            var ap = player.GetModPlayer<AugmentPlayer>();
+            if (ap.PiedPiperCooldown > 0)
+                ap.PiedPiperCooldown--;
 
-            if (durationRemaining > 0)
-                durationRemaining--;
+            if (ap.PiedPiperDurationRemaining > 0)
+                ap.PiedPiperDurationRemaining--;
 
-            if (cooldownRemaining <= 0 && HasActiveMinion(player))
+            if (ap.PiedPiperCooldown <= 0 && HasActiveMinion(player))
             {
-                durationRemaining = DurationTicks;
-                cooldownRemaining = CooldownTicks;
+                ap.PiedPiperDurationRemaining = DurationTicks;
+                ap.PiedPiperCooldown = CooldownTicks;
             }
         }
 
@@ -62,7 +60,7 @@ namespace Augments
 
         public override void ModifyHurt(Player player, ref Player.HurtModifiers modifiers)
         {
-            if (durationRemaining > 0)
+            if (player.GetModPlayer<AugmentPlayer>().PiedPiperDurationRemaining > 0)
                 modifiers.FinalDamage *= 1f - IncomingDamageReductionPercent;
         }
     }
