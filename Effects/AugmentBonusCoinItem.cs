@@ -1,3 +1,4 @@
+using System.IO;
 using Terraria;
 using Terraria.ModLoader;
 
@@ -12,6 +13,21 @@ namespace Augments
 		public override bool InstancePerEntity => true;
 
 		public bool IsLuckyFindBonus;
+
+		// Without this, IsLuckyFindBonus never survives the item's own
+		// network sync (NewItem's world-drop broadcast, or any later
+		// SyncItem/InstancedItem sync) - the receiving side reconstructs
+		// this GlobalItem instance from scratch at its default (false),
+		// silently losing the flag before OnPickup ever sees it.
+		public override void NetSend(Item item, BinaryWriter writer)
+		{
+			writer.Write(IsLuckyFindBonus);
+		}
+
+		public override void NetReceive(Item item, BinaryReader reader)
+		{
+			IsLuckyFindBonus = reader.ReadBoolean();
+		}
 
 		public override bool OnPickup(Item item, Player player)
 		{

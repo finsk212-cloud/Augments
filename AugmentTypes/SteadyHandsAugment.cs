@@ -23,7 +23,7 @@ namespace Augments
         public override void OnUpdate(Player player)
         {
             var ap = player.GetModPlayer<AugmentPlayer>();
-            bool isStill = player.velocity.LengthSquared() < 0.01f;
+            bool isStill = player.velocity.LengthSquared() < 0.25f;
 
             if (!isStill)
             {

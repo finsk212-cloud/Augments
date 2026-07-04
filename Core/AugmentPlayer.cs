@@ -4,9 +4,11 @@ using System.Linq;
 using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.Audio;
+using Terraria.Chat;
 using Terraria.DataStructures;
 using Terraria.GameInput;
 using Terraria.ID;
+using Terraria.Localization;
 using Terraria.ModLoader;
 using Terraria.ModLoader.IO;
 
@@ -46,6 +48,20 @@ namespace Augments
 			return id != null && ownedIds.Contains(id);
 		}
 
+		// Main.NewText broadcasts to every connected client when netMode==Server
+		// (a genuine dedicated server, or a "Host & Play" host) - only correct
+		// for singleplayer. Player-specific notifications need the targeted
+		// ChatHelper path instead, same pattern already established in
+		// AugmentRewardLogic. Every caller below has already ruled out
+		// MultiplayerClient by this point, so only SinglePlayer/Server remain.
+		private void NotifyPlayer(string message, Color color)
+		{
+			if (Main.netMode == NetmodeID.Server)
+				ChatHelper.SendChatMessageToClient(NetworkText.FromLiteral(message), color, Player.whoAmI);
+			else
+				Main.NewText(message, color);
+		}
+
 		public bool GrantAugmentByIdServerAuthoritative(string id, bool sync = true)
 		{
 			if (Main.netMode == NetmodeID.MultiplayerClient)
@@ -67,6 +83,8 @@ namespace Augments
 			RebuildOwnedCacheFromOwnedIdsOnly();
 			augment.OnAcquire(Player);
 
+			NotifyPlayer($"Augment acquired: {augment.DisplayName}", new Color(255, 215, 0));
+
 			if (sync && Main.netMode == NetmodeID.Server)
 				AugmentNet.SendSyncPlayer(Player);
 			return true;
@@ -77,7 +95,12 @@ namespace Augments
 			if (Main.netMode == NetmodeID.MultiplayerClient || !ownedIds.Remove(id))
 				return false;
 
+			Augment augment = AugmentDatabase.GetById(id);
 			RebuildOwnedCacheFromOwnedIdsOnly();
+
+			if (augment != null)
+				NotifyPlayer($"Augment removed: {augment.DisplayName}", new Color(255, 140, 140));
+
 			if (sync && Main.netMode == NetmodeID.Server)
 				AugmentNet.SendSyncPlayer(Player);
 			return true;
@@ -102,6 +125,11 @@ namespace Augments
 			int refund = GetRemoveRefund(augment.Rarity);
 			if (refund > 0)
 				SpawnEssenceRefund(refund);
+
+			string soldMessage = refund > 0
+				? $"{augment.DisplayName} sold to Mommy 2B - received {refund} Augment Essence."
+				: $"{augment.DisplayName} sold to Mommy 2B. Available to buy back later.";
+			NotifyPlayer(soldMessage, new Color(180, 220, 255));
 
 			if (sync && Main.netMode == NetmodeID.Server)
 				AugmentNet.SendSyncPlayer(Player);
@@ -130,6 +158,8 @@ namespace Augments
 			everOwnedIds.Add(id);
 			RebuildOwnedCacheFromOwnedIdsOnly();
 			augment.OnAcquire(Player);
+
+			NotifyPlayer($"{augment.DisplayName} bought back from Mommy 2B.", new Color(255, 215, 0));
 
 			if (Main.netMode == NetmodeID.Server)
 				SyncInventory();
@@ -167,13 +197,10 @@ namespace Augments
 				if (refund > 0)
 					SpawnEssenceRefund(refund);
 
-				if (Main.netMode != NetmodeID.Server)
-				{
-					string msg = refund > 0
-						? $"{augment.DisplayName} sold to Mommy 2B - received {refund} Augment Essence."
-						: $"{augment.DisplayName} sold to Mommy 2B. Available to buy back later.";
-					Main.NewText(msg, 180, 220, 255);
-				}
+				string msg = refund > 0
+					? $"{augment.DisplayName} sold to Mommy 2B - received {refund} Augment Essence."
+					: $"{augment.DisplayName} sold to Mommy 2B. Available to buy back later.";
+				NotifyPlayer(msg, new Color(180, 220, 255));
 
 				if (sync && Main.netMode == NetmodeID.Server)
 					AugmentNet.SendSyncPlayer(Player);
@@ -372,6 +399,13 @@ namespace Augments
 				if (soldAugmentIds.Contains(augment.Id))
 					continue;
 
+				// Support class temporarily disabled from the reward pool - the
+				// cross-player packet flow (Soul Link, Lifeline, Undying Bond,
+				// Revitalizing Wave) is not working correctly in multiplayer yet.
+				// Remove this check once the root cause is found and fixed.
+				if (augment.Class == AugmentClass.Support)
+					continue;
+
 				// Keystones never appear through this normal per-slot roll at
 				// all, locked or not - the only way one is ever offered is the
 				// separate whole-family check in AugmentRewardLogic.GrantReward,
@@ -481,7 +515,7 @@ namespace Augments
 				if (RevitalizingWaveTimer > 0)
 					RevitalizingWaveTimer--;
 
-				if (RevitalizingWaveTimer == 0 && Main.netMode != NetmodeID.MultiplayerClient)
+				if (RevitalizingWaveTimer == 0)
 				{
 					bool healedAny = false;
 					foreach (Player target in Main.player)
@@ -489,9 +523,9 @@ namespace Augments
 						if (!SupportEffects.IsAllyInRange(Player, target, SupportEffects.AuraRadius))
 							continue;
 
-						ModContent.GetInstance<Augments>().Logger.Info($"Revitalizing Wave trigger owner={Player.name} target={target.name} netMode={Main.netMode}");
-						SupportEffects.ServerHealPlayer(target, 25);
-						healedAny = true;
+						int healed = SupportEffects.ServerHealPlayer(target, 25);
+						if (healed > 0)
+							healedAny = true;
 					}
 
 					if (healedAny)
@@ -510,9 +544,14 @@ namespace Augments
 				}
 			}
 
-			if (Main.netMode == NetmodeID.MultiplayerClient)
-				return;
-
+			// Self-only detection (own HP threshold, own nearby-owner scan feeding
+			// lifelineProtectionAuthorized below) - no netmode guard needed, same
+			// reasoning as Mending Aura. The internal Server checks further down
+			// still correctly gate only the network broadcast to OTHER clients;
+			// the server independently re-validates authorization from scratch
+			// before ever touching Player.dead/statLife (see
+			// HandleLifelineRequest/TryConsumeLifelineServer), so a client
+			// locally computing this flag early carries no exploit risk.
 			if (Player.statLife <= (int)(Player.statLifeMax2 * 0.20f) && LastRitesCooldown == 0 &&
 				SupportEffects.TryFindSupportOwner(Player, "last_rites", AuraRadius, out _))
 			{
@@ -563,7 +602,12 @@ namespace Augments
 
 		public bool TryConsumeLifelineServer()
 		{
-			if (Main.netMode == NetmodeID.MultiplayerClient || LifelineCooldown > 0 ||
+			// Note: PreKill already diverts MultiplayerClient callers to the
+			// packet-request branch above and never reaches this method in that
+			// case, so this guard was already inert for that call path - kept
+			// removed anyway for consistency with the rest of the "self-only
+			// effects don't need this guard" cleanup.
+			if (LifelineCooldown > 0 ||
 				!SupportEffects.TryFindSupportOwner(Player, "lifeline", AuraRadius, out Player owner))
 				return false;
 
@@ -588,10 +632,10 @@ namespace Augments
 
 		public void TickMendingAura()
 		{
-			if (Main.netMode == NetmodeID.MultiplayerClient)
-				return;
-
-			if (Player.velocity.LengthSquared() >= 0.01f)
+			// Self-only heal, same category as TickVitalEcho below - no netmode guard
+			// needed here, same reasoning as the direct statLife heal at the bottom
+			// of this method.
+			if (Player.velocity.LengthSquared() >= 0.25f)
 			{
 				mendingAuraHealTimer = 0;
 				return;
@@ -602,7 +646,14 @@ namespace Augments
 				return;
 
 			mendingAuraHealTimer = 0;
-			SupportEffects.ServerHealPlayer(Player, 5);
+
+			// Self-only heal - apply directly rather than routing through
+			// ServerHealPlayer, which exists for CROSS-PLAYER heals (Revitalizing
+			// Wave, Soul Link) that need server authority. Same unguarded
+			// statLife+HealEffect pattern every other personal heal in this mod
+			// already uses (Quick Recovery, Second Wind, Swarm Tactics, etc).
+			Player.statLife = System.Math.Min(Player.statLifeMax2, Player.statLife + 5);
+			Player.HealEffect(5, true);
 		}
 
 		public void TickVitalEcho()

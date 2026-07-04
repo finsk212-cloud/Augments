@@ -44,11 +44,7 @@ namespace Augments
 
             marker.ClearTag();
 
-            Main.NewText("Stormcaller: magic kill detected, rolling...");
-
-            float rolledValue = Main.rand.NextFloat();
-            bool success = rolledValue < ProcChance;
-            Main.NewText($"Stormcaller roll: {rolledValue}, success={success}");
+            bool success = Main.rand.NextFloat() < ProcChance;
 
             if (success)
                 StrikeRandomNearbyTarget(npc);

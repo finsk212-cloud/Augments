@@ -118,6 +118,12 @@ namespace Augments
 				if (augment == null)
 					continue;
 
+				// Support class temporarily unobtainable (see RollChoices) - a
+				// save from before this change could have one sitting in
+				// SoldAugmentIds; don't let buy-back reintroduce it.
+				if (augment.Class == AugmentClass.Support)
+					continue;
+
 				int buyBackCost = AugmentPlayer.GetBuyBackCost(augment.Rarity);
 				var entry = new AugmentShopEntry(augment, $"Buy ({buyBackCost} Essence)", BuyBack);
 				entry.Width.Set(0f, 1f);

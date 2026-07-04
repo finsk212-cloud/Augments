@@ -23,15 +23,19 @@ namespace Augments
 			if (teamHeal <= 0)
 				return;
 
-			if (Main.netMode == NetmodeID.SinglePlayer)
+			if (Main.netMode != NetmodeID.MultiplayerClient)
 			{
+				// Covers both SinglePlayer and Server (a hosting player's own
+				// client also runs as Server, not SinglePlayer, in "Host & Play"
+				// multiplayer - a narrower SinglePlayer-only check here would
+				// silently never heal teammates for the host).
 				foreach (Player target in Main.player)
 				{
 					if (SupportEffects.IsAllyInRange(player, target, SupportEffects.AuraRadius))
 						SupportEffects.ServerHealPlayer(target, teamHeal);
 				}
 			}
-			else if (Main.netMode == NetmodeID.MultiplayerClient && player.whoAmI == Main.myPlayer)
+			else if (player.whoAmI == Main.myPlayer)
 			{
 				ModPacket packet = ModContent.GetInstance<Augments>().GetPacket();
 				packet.Write((byte)AugmentPacketType.SoulLinkRequest);
