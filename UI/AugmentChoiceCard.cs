@@ -47,6 +47,15 @@ namespace Augments
 		private static readonly Vector2 SupportTagScale = new Vector2(0.65f);
 		private static readonly Color SupportTagColor = new Color(100, 220, 140);
 
+		// Tag drawn at the bottom of Lucky-themed cards, same treatment as the
+		// Support tag. Hover reveals the full Fortune family. No current
+		// augment is both Support and Lucky-themed (all Lucky-themed ones are
+		// AugmentClass.Universal), so the two tags never need to stack.
+		private const string FortuneTagText = "FORTUNE";
+		private const float FortuneTagSpacing = 8f;
+		private static readonly Vector2 FortuneTagScale = new Vector2(0.65f);
+		private static readonly Color FortuneTagColor = new Color(230, 190, 60);
+
 		// Higher rarity = faster/brighter border pulse. Index matches AugmentRarity.
 		private static readonly float[] PulseSpeed = { 0f, 1.6f, 2.4f, 3.4f };
 		private static readonly float[] PulseStrength = { 0f, 0.18f, 0.32f, 0.5f };
@@ -55,6 +64,7 @@ namespace Augments
 		private readonly List<string> descLines;
 		private readonly bool isKeystone;
 		private readonly bool isSupport;
+		private readonly bool isFortuneThemed;
 		private readonly Color baseBorderColor;
 		private readonly float pulseSpeed;
 		private readonly float pulseStrength;
@@ -65,6 +75,7 @@ namespace Augments
 			Augment = augment;
 			isKeystone = augment.KeystoneFamily != null;
 			isSupport = augment.Class == AugmentClass.Support;
+			isFortuneThemed = augment.IsLuckyThemed;
 
 			baseBorderColor = RarityColor(augment.Rarity);
 			BackgroundColor = baseBorderColor * 0.35f;
@@ -147,12 +158,13 @@ namespace Augments
 			{
 				Vector2 tagSize = ChatManager.GetStringSize(font, SupportTagText, SupportTagScale);
 				float tagY = inner.Y + inner.Height - (tagSize.Y + SupportTagSpacing);
+				Vector2 tagPos = new Vector2(centerX - tagSize.X / 2f, tagY);
 
 				ChatManager.DrawColorCodedStringWithShadow(
 					spriteBatch,
 					font,
 					SupportTagText,
-					new Vector2(centerX - tagSize.X / 2f, tagY),
+					tagPos,
 					SupportTagColor,
 					0f,
 					Vector2.Zero,
@@ -162,9 +174,43 @@ namespace Augments
 				// NOTE: tooltip is drawn in DrawSelf, same depth as the card.
 				// If another card renders after this one in the same container it
 				// could paint over the tooltip box. Flag for review if observed.
-				if (IsMouseHovering)
+				if (IsMouseHoveringRect(tagPos, tagSize))
 					DrawSupportTooltip(spriteBatch, font);
 			}
+
+			if (isFortuneThemed)
+			{
+				Vector2 tagSize = ChatManager.GetStringSize(font, FortuneTagText, FortuneTagScale);
+				float tagY = inner.Y + inner.Height - (tagSize.Y + FortuneTagSpacing);
+				Vector2 tagPos = new Vector2(centerX - tagSize.X / 2f, tagY);
+
+				ChatManager.DrawColorCodedStringWithShadow(
+					spriteBatch,
+					font,
+					FortuneTagText,
+					tagPos,
+					FortuneTagColor,
+					0f,
+					Vector2.Zero,
+					FortuneTagScale
+				);
+
+				// NOTE: tooltip is drawn in DrawSelf, same depth as the card.
+				// If another card renders after this one in the same container it
+				// could paint over the tooltip box. Flag for review if observed.
+				if (IsMouseHoveringRect(tagPos, tagSize))
+					DrawFortuneTooltip(spriteBatch, font);
+			}
+		}
+
+		// Tag text is drawn directly via ChatManager (not a child UIElement),
+		// so there's no built-in hover state for just the tag - check the
+		// actual mouse screen position against the tag's own drawn bounds
+		// instead of falling back to the whole card's IsMouseHovering.
+		private static bool IsMouseHoveringRect(Vector2 pos, Vector2 size)
+		{
+			return Main.MouseScreen.X >= pos.X && Main.MouseScreen.X <= pos.X + size.X
+				&& Main.MouseScreen.Y >= pos.Y && Main.MouseScreen.Y <= pos.Y + size.Y;
 		}
 
 		private static float DrawCenteredLines(SpriteBatch spriteBatch, DynamicSpriteFont font, List<string> lines, Vector2 scale, float centerX, float y)
@@ -224,6 +270,59 @@ namespace Augments
 				("4 augments: -16% damage, +40 defense",  Color.White),
 				("5 augments: -5% damage, +60 defense",   Color.White),
 			};
+
+			var scale = Vector2.One;
+
+			float maxWidth = 0f;
+			float totalHeight = 0f;
+			foreach (var (text, _) in lines)
+			{
+				Vector2 size = ChatManager.GetStringSize(font, text, scale);
+				if (size.X > maxWidth) maxWidth = size.X;
+				totalHeight += size.Y + lineSpacing;
+			}
+			totalHeight -= lineSpacing;
+
+			float boxWidth = maxWidth + padding * 2f;
+			float boxHeight = totalHeight + padding * 2f;
+
+			Vector2 boxPos = new Vector2(
+				Main.MouseScreen.X - 24f - boxWidth,
+				Main.MouseScreen.Y + 24f
+			);
+
+			var boxRect = new Rectangle((int)boxPos.X, (int)boxPos.Y, (int)boxWidth, (int)boxHeight);
+
+			spriteBatch.Draw(TextureAssets.MagicPixel.Value, boxRect, new Color(20, 25, 50) * 0.95f);
+
+			const int border = 2;
+			Color borderColor = Color.White * 0.5f;
+			spriteBatch.Draw(TextureAssets.MagicPixel.Value, new Rectangle(boxRect.X, boxRect.Y, boxRect.Width, border), borderColor);
+			spriteBatch.Draw(TextureAssets.MagicPixel.Value, new Rectangle(boxRect.X, boxRect.Bottom - border, boxRect.Width, border), borderColor);
+			spriteBatch.Draw(TextureAssets.MagicPixel.Value, new Rectangle(boxRect.X, boxRect.Y, border, boxRect.Height), borderColor);
+			spriteBatch.Draw(TextureAssets.MagicPixel.Value, new Rectangle(boxRect.Right - border, boxRect.Y, border, boxRect.Height), borderColor);
+
+			float y = boxRect.Y + padding;
+			float x = boxRect.X + padding;
+			foreach (var (text, color) in lines)
+			{
+				Vector2 size = ChatManager.GetStringSize(font, text, scale);
+				ChatManager.DrawColorCodedStringWithShadow(spriteBatch, font, text, new Vector2(x, y), color, 0f, Vector2.Zero, scale);
+				y += size.Y + lineSpacing;
+			}
+		}
+
+		internal static void DrawFortuneTooltip(SpriteBatch spriteBatch, DynamicSpriteFont font)
+		{
+			const float padding = 10f;
+			const float lineSpacing = 2f;
+
+			var lines = new List<(string Text, Color Color)> { ("Fortune Family", FortuneTagColor) };
+			foreach (var other in AugmentDatabase.All)
+			{
+				if (other.IsLuckyThemed)
+					lines.Add((other.DisplayName, Color.White));
+			}
 
 			var scale = Vector2.One;
 

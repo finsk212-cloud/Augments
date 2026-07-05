@@ -28,8 +28,8 @@ namespace Augments
 				case AugmentPacketType.OpenRewardChoices:
 					HandleOpenRewardChoices(reader);
 					return true;
-				case AugmentPacketType.RerollRewardChoices:
-					HandleRerollRewardChoices(whoAmI);
+				case AugmentPacketType.RerollRequest:
+					HandleRerollRequest(reader, whoAmI);
 					return true;
 				case AugmentPacketType.LuckyFindDropRequest:
 					HandleLuckyFindDropRequest(reader, whoAmI);
@@ -87,13 +87,14 @@ namespace Augments
 			packet.Send(toClient);
 		}
 
-		public static void SendRerollRewardChoices()
+		public static void SendRerollRequest(Player player)
 		{
-			if (Main.netMode != NetmodeID.MultiplayerClient)
+			if (Main.netMode != NetmodeID.MultiplayerClient || player == null)
 				return;
 
 			ModPacket packet = ModContent.GetInstance<Augments>().GetPacket();
-			packet.Write((byte)AugmentPacketType.RerollRewardChoices);
+			packet.Write((byte)AugmentPacketType.RerollRequest);
+			packet.Write((byte)player.whoAmI);
 			packet.Send();
 		}
 
@@ -224,25 +225,24 @@ namespace Augments
 				ModContent.GetInstance<AugmentUISystem>().ShowChoices(choices, rarity, true, rerolled);
 		}
 
-		private static void HandleRerollRewardChoices(int whoAmI)
+		private static void HandleRerollRequest(BinaryReader reader, int whoAmI)
 		{
-			if (Main.netMode != NetmodeID.Server || whoAmI < 0 || whoAmI >= Main.maxPlayers)
+			int playerId = reader.ReadByte();
+
+			if (Main.netMode != NetmodeID.Server || playerId != whoAmI || playerId < 0 || playerId >= Main.maxPlayers)
 				return;
-			if (!PendingRewardChoicesByPlayer.TryGetValue(whoAmI, out var pending) || pending.Rerolled)
+			if (!PendingRewardChoicesByPlayer.TryGetValue(playerId, out var pending) || pending.Rerolled || pending.Choices.Count == 0)
 				return;
 
-			Player player = Main.player[whoAmI];
-			int essenceType = ModContent.ItemType<AugmentEssenceItem>();
-			if (!player.active || player.CountItem(essenceType) < 1)
+			Player player = Main.player[playerId];
+			if (!player.active)
 				return;
 
 			List<Augment> choices = player.GetModPlayer<AugmentPlayer>().RollChoices(3, pending.Rarity, pending.Choices);
 			if (choices.Count == 0)
 				return;
 
-			player.ConsumeItem(essenceType);
-			player.GetModPlayer<AugmentPlayer>().SyncInventory();
-			SendRewardChoices(whoAmI, choices, pending.Rarity, true);
+			SendRewardChoices(playerId, choices, pending.Rarity, true);
 		}
 
 		private static void HandleLuckyFindDropRequest(BinaryReader reader, int whoAmI)
@@ -258,7 +258,6 @@ namespace Augments
 			if (!player.active || !player.GetModPlayer<AugmentPlayer>().HasAugment("lucky_find"))
 				return;
 
-			Main.NewText("LuckyFind server received drop request");
 			LuckyFindAugment.TryDropCoinsServer(player, position, effectiveness);
 		}
 

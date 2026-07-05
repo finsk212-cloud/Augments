@@ -29,26 +29,19 @@ namespace Augments
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
             if (target.life <= 0)
-            {
-                Main.NewText($"LuckyFind kill detected netMode={Main.netMode}");
                 HandleKill(player, target.Center, HitEffectiveness);
-            }
         }
 
         public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
         {
             if (target.life <= 0)
-            {
-                Main.NewText($"LuckyFind kill detected netMode={Main.netMode}");
                 HandleKill(player, target.Center, HitEffectiveness);
-            }
         }
 
         private void HandleKill(Player player, Vector2 position, float effectiveness)
         {
             if (Main.netMode == NetmodeID.MultiplayerClient)
             {
-                Main.NewText("LuckyFind sending drop request");
                 AugmentNet.SendLuckyFindDropRequest(player, position, effectiveness);
                 return;
             }
@@ -78,10 +71,7 @@ namespace Augments
             bonusData.BonusCoinValue = (long)coinCount * CopperPerSilver;
 
             if (Main.netMode == NetmodeID.Server)
-            {
-                Main.NewText("LuckyFind server spawned coin");
                 NetMessage.SendData(MessageID.SyncItem, number: index);
-            }
         }
 
         internal static string FormatCoins(long copper)

@@ -51,7 +51,13 @@ namespace Augments
         private void RollOutcome(Player player, NPC target, NPC.HitInfo hit)
         {
             var ap = player.GetModPlayer<AugmentPlayer>();
-            switch (Main.rand.Next(4))
+            int roll = Main.rand.Next(4);
+
+            // DIAGNOSTIC - temporary
+            string[] names = { "Heal", "Speed", "Invuln", "Bonus Strike" };
+            Main.NewText($"[WildCard] Crit triggered outcome: {names[roll]}", 255, 165, 0);
+
+            switch (roll)
             {
                 case 0:
                     int healing = ScaleHitEffect(HealAmount);

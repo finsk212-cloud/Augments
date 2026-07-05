@@ -14,6 +14,8 @@ namespace Augments
         public override AugmentRarity Rarity => AugmentRarity.Common;
         public override AugmentClass Class => AugmentClass.Universal;
 
+        public override bool IsLuckyThemed => true;
+
         public override float FortuneBonus => 0.10f;
 
         private const int RegenIntervalTicks = 240;

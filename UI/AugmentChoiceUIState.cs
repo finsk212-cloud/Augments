@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using Terraria;
+using Terraria.GameContent;
 using Terraria.GameContent.UI.Elements;
 using Terraria.ModLoader;
 using Terraria.UI;
@@ -14,7 +16,11 @@ namespace Augments
 		private readonly List<AugmentChoiceCard> cards = new List<AugmentChoiceCard>();
 		private readonly HashSet<string> currentChoiceIds = new HashSet<string>();
 		private RerollButton rerollButton;
+		private RerollButton skipButton;
 		private UIText capNoticeText;
+		private ModalButton minimizeButton;
+		private RestoreIcon restoreIcon;
+		private bool isMinimized;
 
 		// Rarity tier this popup's cards were rolled at - a reroll must stay
 		// on this same tier, not re-roll a fresh (possibly different) one.
@@ -23,6 +29,7 @@ namespace Augments
 		// Exactly one reroll per popup, no matter how much Essence is
 		// stockpiled - reset to false only when a fresh popup is shown.
 		private bool rerollUsed;
+		private bool rerollPending;
 		private bool networkReward;
 
 		// --- Keystone confirmation overlay ---
@@ -34,6 +41,7 @@ namespace Augments
 		private UIPanel confirmOverlay;
 		private UIText confirmMessageText;
 		private Augment pendingKeystone;
+		private bool pendingSkipConfirm;
 
 		private const float PanelWidth = 860f;
 		private const float CardWidth = 270f;
@@ -80,17 +88,59 @@ namespace Augments
 			capNoticeText.Top.Set(42f, 0f);
 			backPanel.Append(capNoticeText);
 
+			// Reroll and Skip sit side by side on the same row, centered as a
+			// pair with a small gap between them. Left is set in pixel terms
+			// relative to the pair's own total width (not the 0.5f anchor
+			// alone), since anchoring both buttons off 50% without accounting
+			// for their widths made them overlap.
+			float rerollRowTop = CardsTop + AugmentChoiceCard.MinCardHeight + RerollGap;
+			const float buttonGap = 16f;
+			const float rerollWidth = 200f;
+			const float skipWidth = 140f;
+			float pairWidth = rerollWidth + buttonGap + skipWidth;
+
 			rerollButton = new RerollButton();
-			rerollButton.Width.Set(200f, 0f);
+			rerollButton.Width.Set(rerollWidth, 0f);
 			rerollButton.Height.Set(RerollButtonHeight, 0f);
-			rerollButton.HAlign = 0.5f;
-			rerollButton.Top.Set(CardsTop + AugmentChoiceCard.MinCardHeight + RerollGap, 0f);
+			rerollButton.Left.Set(-pairWidth / 2f, 0.5f);
+			rerollButton.Top.Set(rerollRowTop, 0f);
 			rerollButton.Clicked += HandleRerollClicked;
 			backPanel.Append(rerollButton);
+
+			skipButton = new RerollButton(new Color(120, 30, 30), new Color(170, 45, 45));
+			skipButton.Width.Set(skipWidth, 0f);
+			skipButton.Height.Set(RerollButtonHeight, 0f);
+			skipButton.Left.Set(-pairWidth / 2f + rerollWidth + buttonGap, 0.5f);
+			skipButton.Top.Set(rerollRowTop, 0f);
+			skipButton.SetEnabled(true, "Skip");
+			skipButton.Clicked += HandleSkipClicked;
+			backPanel.Append(skipButton);
+
+			minimizeButton = new ModalButton("-", new Color(60, 60, 70), new Color(90, 90, 105));
+			minimizeButton.Width.Set(24f, 0f);
+			minimizeButton.Height.Set(24f, 0f);
+			minimizeButton.Left.Set(-30f, 1f);
+			minimizeButton.Top.Set(6f, 0f);
+			minimizeButton.Clicked += HandleMinimizeClicked;
+			backPanel.Append(minimizeButton);
 
 			Append(backPanel);
 
 			BuildConfirmOverlay();
+			BuildRestoreIcon();
+		}
+
+		// Built once and kept around, but only appended to the root UIState
+		// while the panel is minimized - the underlying choices/reroll state
+		// live on regardless of whether backPanel or restoreIcon is showing.
+		private void BuildRestoreIcon()
+		{
+			restoreIcon = new RestoreIcon();
+			restoreIcon.Width.Set(48f, 0f);
+			restoreIcon.Height.Set(48f, 0f);
+			restoreIcon.HAlign = 0.5f;
+			restoreIcon.VAlign = 0.85f;
+			restoreIcon.Clicked += HandleRestoreClicked;
 		}
 
 		// Built once and kept around, but only appended to the root UIState
@@ -114,7 +164,7 @@ namespace Augments
 			confirmBox.BorderColor = new Color(220, 60, 60);
 			confirmOverlay.Append(confirmBox);
 
-			UIText confirmTitleText = new UIText("Permanent Choice", 1.05f)
+			UIText confirmTitleText = new UIText("Confirm", 1.05f)
 			{
 				HAlign = 0.5f,
 				TextColor = new Color(220, 60, 60)
@@ -138,7 +188,7 @@ namespace Augments
 			confirmButton.HAlign = 0.25f;
 			confirmButton.VAlign = 1f;
 			confirmButton.Top.Set(-16f, 0f);
-			confirmButton.Clicked += HandleKeystoneConfirmed;
+			confirmButton.Clicked += HandleConfirmOverlayConfirmed;
 			confirmBox.Append(confirmButton);
 
 			var cancelButton = new ModalButton("Cancel", new Color(60, 70, 110), new Color(90, 105, 160));
@@ -147,7 +197,7 @@ namespace Augments
 			cancelButton.HAlign = 0.75f;
 			cancelButton.VAlign = 1f;
 			cancelButton.Top.Set(-16f, 0f);
-			cancelButton.Clicked += HandleKeystoneCanceled;
+			cancelButton.Clicked += HandleConfirmOverlayCanceled;
 			confirmBox.Append(cancelButton);
 		}
 
@@ -164,8 +214,17 @@ namespace Augments
 		{
 			currentRarity = rarity;
 			rerollUsed = rerolled;
+			rerollPending = false;
 			this.networkReward = networkReward;
+			pendingSkipConfirm = false;
 			HideKeystoneConfirm();
+
+			// Fresh popup always starts un-minimized, regardless of how the
+			// previous one was left.
+			isMinimized = false;
+			RemoveChild(restoreIcon);
+			if (backPanel.Parent == null)
+				Append(backPanel);
 
 			RebuildCards(choices);
 			RefreshCapNotice();
@@ -236,8 +295,28 @@ namespace Augments
 			RemoveChild(confirmOverlay);
 		}
 
-		private void HandleKeystoneConfirmed()
+		private void HandleSkipClicked()
 		{
+			pendingSkipConfirm = true;
+			pendingKeystone = null;
+
+			confirmMessageText.SetText(
+				"Are you sure you want to skip this augment selection? " +
+				"This reward will be forfeited and cannot be recovered.");
+
+			Append(confirmOverlay);
+		}
+
+		private void HandleConfirmOverlayConfirmed()
+		{
+			if (pendingSkipConfirm)
+			{
+				pendingSkipConfirm = false;
+				RemoveChild(confirmOverlay);
+				ModContent.GetInstance<AugmentUISystem>().HidePanel();
+				return;
+			}
+
 			if (pendingKeystone == null)
 				return;
 
@@ -247,9 +326,30 @@ namespace Augments
 		// Dismisses the confirmation and returns to the original 3-card
 		// choice without granting anything - the cards underneath were never
 		// touched, so a different card can still be picked instead.
-		private void HandleKeystoneCanceled()
+		private void HandleConfirmOverlayCanceled()
 		{
+			pendingSkipConfirm = false;
 			HideKeystoneConfirm();
+		}
+
+		private void HandleMinimizeClicked()
+		{
+			// Don't allow minimizing while a Keystone/Skip confirmation is up -
+			// it's modal and meant to block interaction with everything behind
+			// it, so swapping the panel out from under it would look broken.
+			if (confirmOverlay.Parent != null)
+				return;
+
+			isMinimized = true;
+			RemoveChild(backPanel);
+			Append(restoreIcon);
+		}
+
+		private void HandleRestoreClicked()
+		{
+			isMinimized = false;
+			RemoveChild(restoreIcon);
+			Append(backPanel);
 		}
 
 		private void GrantAndClose(Augment augment)
@@ -286,26 +386,22 @@ namespace Augments
 		{
 			// Hard gate - this is re-checked here regardless of the button's
 			// own visual enabled state, since this bool is the entire point
-			// of the feature and must hold even with a large Essence stockpile.
-			if (rerollUsed)
+			// of the feature and must hold no matter how many times the
+			// button is clicked.
+			if (rerollUsed || rerollPending)
 				return;
 
 			var player = Main.LocalPlayer;
-			int essenceType = ModContent.ItemType<AugmentEssenceItem>();
 
-			if (player.CountItem(essenceType, 1) < 1)
+			if (networkReward)
 			{
-				Main.NewText("Not enough Augment Essence.", 255, 80, 80);
+				rerollPending = true;
+				AugmentNet.SendRerollRequest(player);
+				RefreshRerollButton();
 				return;
 			}
 
 			rerollUsed = true;
-			if (networkReward)
-			{
-				AugmentNet.SendRerollRewardChoices();
-				RefreshRerollButton();
-				return;
-			}
 
 			var newChoices = player.GetModPlayer<AugmentPlayer>().RollChoices(3, currentRarity, currentChoiceIds);
 			if (newChoices.Count == 0)
@@ -316,21 +412,25 @@ namespace Augments
 				return;
 			}
 
-			player.ConsumeItem(essenceType);
 			RebuildCards(newChoices);
 			RefreshRerollButton();
 		}
 
 		private void RefreshRerollButton()
 		{
+			if (rerollPending)
+			{
+				rerollButton.SetEnabled(false, "Rerolling...");
+				return;
+			}
+
 			if (rerollUsed)
 			{
 				rerollButton.SetEnabled(false, "Reroll Used");
 				return;
 			}
 
-			int essenceCount = Main.LocalPlayer.CountItem(ModContent.ItemType<AugmentEssenceItem>());
-			rerollButton.SetEnabled(essenceCount >= 1, "Reroll (1 Essence)");
+			rerollButton.SetEnabled(true, "Reroll (Free)");
 		}
 
 		// Small standalone clickable panel - same manual hover/click approach
@@ -341,17 +441,26 @@ namespace Augments
 		{
 			public event Action Clicked;
 
-			private static readonly Color IdleColor = new Color(60, 70, 110);
-			private static readonly Color HoverColor = new Color(90, 105, 160);
+			private static readonly Color DefaultIdleColor = new Color(60, 70, 110);
+			private static readonly Color DefaultHoverColor = new Color(90, 105, 160);
 			private static readonly Color DisabledColor = new Color(45, 45, 45);
 
+			private readonly Color idleColor;
+			private readonly Color hoverColor;
 			private readonly UIText labelText;
 			private bool enabledState = true;
 
-			public RerollButton()
+			public RerollButton() : this(DefaultIdleColor, DefaultHoverColor)
 			{
+			}
+
+			public RerollButton(Color idleColor, Color hoverColor)
+			{
+				this.idleColor = idleColor;
+				this.hoverColor = hoverColor;
+
 				SetPadding(0f);
-				BackgroundColor = IdleColor;
+				BackgroundColor = idleColor;
 				BorderColor = Color.White * 0.4f;
 
 				labelText = new UIText("Reroll (1 Essence)", 0.8f)
@@ -370,7 +479,7 @@ namespace Augments
 					return;
 
 				enabledState = enabled;
-				BackgroundColor = enabled ? IdleColor : DisabledColor;
+				BackgroundColor = enabled ? idleColor : DisabledColor;
 			}
 
 			public override void LeftClick(UIMouseEvent evt)
@@ -386,14 +495,14 @@ namespace Augments
 			{
 				base.MouseOver(evt);
 				if (enabledState)
-					BackgroundColor = HoverColor;
+					BackgroundColor = hoverColor;
 			}
 
 			public override void MouseOut(UIMouseEvent evt)
 			{
 				base.MouseOut(evt);
 				if (enabledState)
-					BackgroundColor = IdleColor;
+					BackgroundColor = idleColor;
 			}
 		}
 
@@ -441,6 +550,62 @@ namespace Augments
 			{
 				base.MouseOut(evt);
 				BackgroundColor = idleColor;
+			}
+		}
+
+		// The minimized-state stand-in for backPanel - small, always-visible
+		// reminder that a reward selection is still pending. Pulses a gold
+		// glow using the same sine-based approach as AugmentChoiceCard's
+		// rarity border pulse, just with a single fixed speed/strength
+		// instead of per-rarity tiers.
+		private class RestoreIcon : UIPanel
+		{
+			public event Action Clicked;
+
+			private static readonly Color BaseBorderColor = new Color(180, 150, 60);
+			private const float PulseSpeed = 2.2f;
+			private const float PulseStrength = 0.4f;
+
+			private float pulseTimer;
+
+			public RestoreIcon()
+			{
+				SetPadding(0f);
+				BackgroundColor = new Color(33, 43, 79) * 0.95f;
+				BorderColor = BaseBorderColor;
+
+				var label = new UIText("?", 1.1f) { HAlign = 0.5f, VAlign = 0.5f };
+				Append(label);
+			}
+
+			public override void Update(GameTime gameTime)
+			{
+				base.Update(gameTime);
+				pulseTimer += (float)gameTime.ElapsedGameTime.TotalSeconds;
+			}
+
+			protected override void DrawSelf(SpriteBatch spriteBatch)
+			{
+				float pulse = (float)Math.Sin(pulseTimer * PulseSpeed) * 0.5f + 0.5f;
+
+				CalculatedStyle dims = GetDimensions();
+				float glowSize = 4f + pulse * PulseStrength * 18f;
+				Rectangle glowRect = new Rectangle(
+					(int)(dims.X - glowSize),
+					(int)(dims.Y - glowSize),
+					(int)(dims.Width + glowSize * 2f),
+					(int)(dims.Height + glowSize * 2f));
+
+				spriteBatch.Draw(TextureAssets.MagicPixel.Value, glowRect, BaseBorderColor * (pulse * PulseStrength * 0.5f));
+				BorderColor = Color.Lerp(BaseBorderColor, Color.White, pulse * PulseStrength);
+
+				base.DrawSelf(spriteBatch);
+			}
+
+			public override void LeftClick(UIMouseEvent evt)
+			{
+				base.LeftClick(evt);
+				Clicked?.Invoke();
 			}
 		}
 	}
