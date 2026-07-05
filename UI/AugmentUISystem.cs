@@ -144,9 +144,9 @@ namespace Augments
 
 		// --- Choice popup controls ---
 
-		public void ShowChoices(List<Augment> choices, AugmentRarity rarity, bool networkReward = false)
+		public void ShowChoices(List<Augment> choices, AugmentRarity rarity, bool networkReward = false, bool rerolled = false)
 		{
-			choiceState.SetChoices(choices, rarity, networkReward);
+			choiceState.SetChoices(choices, rarity, networkReward, rerolled);
 			augmentInterface?.SetState(choiceState);
 		}
 

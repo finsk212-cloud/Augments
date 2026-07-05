@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
@@ -11,7 +12,14 @@ namespace Augments
 		// DEBUG COMMANDS - remove or restrict before public release.
 		public static readonly bool EnableDebugCommandsInMultiplayer = true;
 
-		private static readonly Dictionary<int, HashSet<string>> PendingRewardChoicesByPlayer = new Dictionary<int, HashSet<string>>();
+		private sealed class PendingReward
+		{
+			public HashSet<string> Choices;
+			public AugmentRarity Rarity;
+			public bool Rerolled;
+		}
+
+		private static readonly Dictionary<int, PendingReward> PendingRewardChoicesByPlayer = new Dictionary<int, PendingReward>();
 
 		public static bool HandlePacket(AugmentPacketType type, BinaryReader reader, int whoAmI)
 		{
@@ -19,6 +27,12 @@ namespace Augments
 			{
 				case AugmentPacketType.OpenRewardChoices:
 					HandleOpenRewardChoices(reader);
+					return true;
+				case AugmentPacketType.RerollRewardChoices:
+					HandleRerollRewardChoices(whoAmI);
+					return true;
+				case AugmentPacketType.LuckyFindDropRequest:
+					HandleLuckyFindDropRequest(reader, whoAmI);
 					return true;
 				case AugmentPacketType.ChooseReward:
 					HandleChooseReward(reader, whoAmI);
@@ -49,7 +63,7 @@ namespace Augments
 			return false;
 		}
 
-		public static void SendRewardChoices(int toClient, List<Augment> choices, AugmentRarity rarity)
+		public static void SendRewardChoices(int toClient, List<Augment> choices, AugmentRarity rarity, bool rerolled = false)
 		{
 			if (Main.netMode != NetmodeID.Server)
 				return;
@@ -61,15 +75,40 @@ namespace Augments
 					pendingIds.Add(augment.Id);
 			}
 
-			PendingRewardChoicesByPlayer[toClient] = pendingIds;
+			PendingRewardChoicesByPlayer[toClient] = new PendingReward { Choices = pendingIds, Rarity = rarity, Rerolled = rerolled };
 
 			ModPacket packet = ModContent.GetInstance<Augments>().GetPacket();
 			packet.Write((byte)AugmentPacketType.OpenRewardChoices);
 			packet.Write((byte)rarity);
+			packet.Write(rerolled);
 			packet.Write((byte)choices.Count);
 			foreach (var augment in choices)
 				packet.Write(augment.Id);
 			packet.Send(toClient);
+		}
+
+		public static void SendRerollRewardChoices()
+		{
+			if (Main.netMode != NetmodeID.MultiplayerClient)
+				return;
+
+			ModPacket packet = ModContent.GetInstance<Augments>().GetPacket();
+			packet.Write((byte)AugmentPacketType.RerollRewardChoices);
+			packet.Send();
+		}
+
+		public static void SendLuckyFindDropRequest(Player player, Vector2 position, float effectiveness)
+		{
+			if (Main.netMode != NetmodeID.MultiplayerClient || player == null)
+				return;
+
+			ModPacket packet = ModContent.GetInstance<Augments>().GetPacket();
+			packet.Write((byte)AugmentPacketType.LuckyFindDropRequest);
+			packet.Write((byte)player.whoAmI);
+			packet.Write(position.X);
+			packet.Write(position.Y);
+			packet.Write(effectiveness);
+			packet.Send();
 		}
 
 		public static void SendChooseReward(string augmentId)
@@ -170,6 +209,7 @@ namespace Augments
 				return;
 
 			AugmentRarity rarity = (AugmentRarity)reader.ReadByte();
+			bool rerolled = reader.ReadBoolean();
 			int count = reader.ReadByte();
 			var choices = new List<Augment>();
 			for (int i = 0; i < count; i++)
@@ -181,7 +221,45 @@ namespace Augments
 			}
 
 			if (choices.Count > 0)
-				ModContent.GetInstance<AugmentUISystem>().ShowChoices(choices, rarity, true);
+				ModContent.GetInstance<AugmentUISystem>().ShowChoices(choices, rarity, true, rerolled);
+		}
+
+		private static void HandleRerollRewardChoices(int whoAmI)
+		{
+			if (Main.netMode != NetmodeID.Server || whoAmI < 0 || whoAmI >= Main.maxPlayers)
+				return;
+			if (!PendingRewardChoicesByPlayer.TryGetValue(whoAmI, out var pending) || pending.Rerolled)
+				return;
+
+			Player player = Main.player[whoAmI];
+			int essenceType = ModContent.ItemType<AugmentEssenceItem>();
+			if (!player.active || player.CountItem(essenceType) < 1)
+				return;
+
+			List<Augment> choices = player.GetModPlayer<AugmentPlayer>().RollChoices(3, pending.Rarity, pending.Choices);
+			if (choices.Count == 0)
+				return;
+
+			player.ConsumeItem(essenceType);
+			player.GetModPlayer<AugmentPlayer>().SyncInventory();
+			SendRewardChoices(whoAmI, choices, pending.Rarity, true);
+		}
+
+		private static void HandleLuckyFindDropRequest(BinaryReader reader, int whoAmI)
+		{
+			int playerId = reader.ReadByte();
+			var position = new Vector2(reader.ReadSingle(), reader.ReadSingle());
+			float effectiveness = MathHelper.Clamp(reader.ReadSingle(), 0f, 1f);
+
+			if (Main.netMode != NetmodeID.Server || playerId != whoAmI || playerId < 0 || playerId >= Main.maxPlayers)
+				return;
+
+			Player player = Main.player[playerId];
+			if (!player.active || !player.GetModPlayer<AugmentPlayer>().HasAugment("lucky_find"))
+				return;
+
+			Main.NewText("LuckyFind server received drop request");
+			LuckyFindAugment.TryDropCoinsServer(player, position, effectiveness);
 		}
 
 		private static void HandleChooseReward(BinaryReader reader, int whoAmI)
@@ -194,7 +272,7 @@ namespace Augments
 				return;
 			if (!PendingRewardChoicesByPlayer.TryGetValue(whoAmI, out var pendingChoices))
 				return;
-			if (!pendingChoices.Contains(augmentId))
+			if (!pendingChoices.Choices.Contains(augmentId))
 				return;
 
 			Player player = Main.player[whoAmI];

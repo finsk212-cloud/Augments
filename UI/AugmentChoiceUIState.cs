@@ -12,6 +12,7 @@ namespace Augments
 	{
 		private UIPanel backPanel;
 		private readonly List<AugmentChoiceCard> cards = new List<AugmentChoiceCard>();
+		private readonly HashSet<string> currentChoiceIds = new HashSet<string>();
 		private RerollButton rerollButton;
 		private UIText capNoticeText;
 
@@ -159,10 +160,10 @@ namespace Augments
 		// Call this right before showing the panel - replaces whatever cards
 		// were there with a fresh set built from the given augments, and resets
 		// this popup's reroll allowance.
-		public void SetChoices(List<Augment> choices, AugmentRarity rarity, bool networkReward = false)
+		public void SetChoices(List<Augment> choices, AugmentRarity rarity, bool networkReward = false, bool rerolled = false)
 		{
 			currentRarity = rarity;
-			rerollUsed = false;
+			rerollUsed = rerolled;
 			this.networkReward = networkReward;
 			HideKeystoneConfirm();
 
@@ -176,6 +177,7 @@ namespace Augments
 			foreach (var card in cards)
 				backPanel.RemoveChild(card);
 			cards.Clear();
+			currentChoiceIds.Clear();
 
 			int count = choices.Count;
 			// Center against the panel's actual current inner width (post-padding),
@@ -195,6 +197,7 @@ namespace Augments
 
 				backPanel.Append(card);
 				cards.Add(card);
+				currentChoiceIds.Add(choices[i].Id);
 			}
 		}
 
@@ -284,9 +287,6 @@ namespace Augments
 			// Hard gate - this is re-checked here regardless of the button's
 			// own visual enabled state, since this bool is the entire point
 			// of the feature and must hold even with a large Essence stockpile.
-			if (networkReward)
-				return;
-
 			if (rerollUsed)
 				return;
 
@@ -299,22 +299,30 @@ namespace Augments
 				return;
 			}
 
-			player.ConsumeItem(essenceType);
 			rerollUsed = true;
+			if (networkReward)
+			{
+				AugmentNet.SendRerollRewardChoices();
+				RefreshRerollButton();
+				return;
+			}
 
-			var newChoices = player.GetModPlayer<AugmentPlayer>().RollChoices(3, currentRarity);
+			var newChoices = player.GetModPlayer<AugmentPlayer>().RollChoices(3, currentRarity, currentChoiceIds);
+			if (newChoices.Count == 0)
+			{
+				rerollUsed = false;
+				Main.NewText("No other augments are available at this rarity.", 255, 100, 100);
+				RefreshRerollButton();
+				return;
+			}
+
+			player.ConsumeItem(essenceType);
 			RebuildCards(newChoices);
 			RefreshRerollButton();
 		}
 
 		private void RefreshRerollButton()
 		{
-			if (networkReward)
-			{
-				rerollButton.SetEnabled(false, "Server Reward");
-				return;
-			}
-
 			if (rerollUsed)
 			{
 				rerollButton.SetEnabled(false, "Reroll Used");

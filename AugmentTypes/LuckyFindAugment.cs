@@ -1,3 +1,4 @@
+using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
@@ -28,31 +29,66 @@ namespace Augments
         public override void OnHitNPCWithItem(Player player, Item item, NPC target, NPC.HitInfo hit)
         {
             if (target.life <= 0)
-                TryDropCoins(player, target, HitEffectiveness);
+            {
+                Main.NewText($"LuckyFind kill detected netMode={Main.netMode}");
+                HandleKill(player, target.Center, HitEffectiveness);
+            }
         }
 
         public override void OnHitNPCWithProj(Player player, Projectile proj, NPC target, NPC.HitInfo hit)
         {
             if (target.life <= 0)
-                TryDropCoins(player, target, HitEffectiveness);
+            {
+                Main.NewText($"LuckyFind kill detected netMode={Main.netMode}");
+                HandleKill(player, target.Center, HitEffectiveness);
+            }
         }
 
-        private void TryDropCoins(Player player, NPC target, float effectiveness)
+        private void HandleKill(Player player, Vector2 position, float effectiveness)
         {
-            float chance = DropChance * (1f + player.GetModPlayer<AugmentPlayer>().TotalFortune) * effectiveness;
+            if (Main.netMode == NetmodeID.MultiplayerClient)
+            {
+                Main.NewText("LuckyFind sending drop request");
+                AugmentNet.SendLuckyFindDropRequest(player, position, effectiveness);
+                return;
+            }
+
+            TryDropCoinsServer(player, position, effectiveness);
+        }
+
+        internal static void TryDropCoinsServer(Player player, Vector2 position, float effectiveness)
+        {
+            if (Main.netMode == NetmodeID.MultiplayerClient)
+                return;
+
+            var augmentPlayer = player.GetModPlayer<AugmentPlayer>();
+            if (!augmentPlayer.HasAugment("lucky_find"))
+                return;
+
+            float chance = DropChance * (1f + augmentPlayer.TotalFortune) * effectiveness;
             if (Main.rand.NextFloat() >= chance)
                 return;
 
             int coinCount = Main.rand.Next(MinCoins, MaxCoins + 1);
-            int index = Item.NewItem(target.GetSource_Loot(), target.Hitbox, ItemID.SilverCoin, coinCount);
-            Main.item[index].GetGlobalItem<AugmentBonusCoinItem>().IsLuckyFindBonus = true;
+            Rectangle dropRect = new Rectangle((int)position.X, (int)position.Y, 16, 16);
+            int index = Item.NewItem(player.GetSource_FromThis(), dropRect, ItemID.SilverCoin, coinCount);
+
+            var bonusData = Main.item[index].GetGlobalItem<AugmentBonusCoinItem>();
+            bonusData.IsLuckyFindBonus = true;
+            bonusData.BonusCoinValue = (long)coinCount * CopperPerSilver;
+
+            if (Main.netMode == NetmodeID.Server)
+            {
+                Main.NewText("LuckyFind server spawned coin");
+                NetMessage.SendData(MessageID.SyncItem, number: index);
+            }
         }
 
-        internal static string FormatCoins(int copper)
+        internal static string FormatCoins(long copper)
         {
-            int platinum = copper / CopperPerPlatinum;
-            int gold = copper % CopperPerPlatinum / CopperPerGold;
-            int silver = copper % CopperPerGold / CopperPerSilver;
+            long platinum = copper / CopperPerPlatinum;
+            long gold = copper % CopperPerPlatinum / CopperPerGold;
+            long silver = copper % CopperPerGold / CopperPerSilver;
 
             if (platinum > 0)
                 return $"{platinum} Platinum {gold} Gold";

@@ -16,6 +16,8 @@ namespace Augments
 		UndyingBondRequest,
 		UndyingBondRedirect,
 		OpenRewardChoices,
+		RerollRewardChoices,
+		LuckyFindDropRequest,
 		ChooseReward,
 		SyncAugmentState,
 		RequestAugmentSync,

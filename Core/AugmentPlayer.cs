@@ -297,7 +297,7 @@ namespace Augments
 		// Per-player state for augments that previously stored data on the singleton.
 		// Moved here so multiple players in multiplayer don't share the same counter.
 		public HashSet<int> TrophyHunterKilledTypes = new HashSet<int>();
-		public int LuckyFindCopperGained;
+		public long LuckyFindCopperGained;
 
 		// Per-player combat/timer state for the remaining augments that previously
 		// kept these on their singleton instances in AugmentDatabase.All (shared by
@@ -389,12 +389,12 @@ namespace Augments
 		// the normal random pick if no eligible lucky-themed augment exists.
 		private const float LuckyThemedBiasChance = 0.15f;
 
-		public List<Augment> RollChoices(int count, AugmentRarity rarity)
+		public List<Augment> RollChoices(int count, AugmentRarity rarity, IReadOnlySet<string> excludedIds = null)
 		{
 			var available = new List<Augment>();
 			foreach (var augment in AugmentDatabase.All)
 			{
-				if (augment.Rarity != rarity || augment.IsDebugOnly || HasAugment(augment.Id))
+				if (augment.Rarity != rarity || augment.IsDebugOnly || HasAugment(augment.Id) || (excludedIds != null && excludedIds.Contains(augment.Id)))
 					continue;
 				if (soldAugmentIds.Contains(augment.Id))
 					continue;
@@ -1138,7 +1138,7 @@ namespace Augments
 
 		}
 
-		private void SyncInventory()
+		internal void SyncInventory()
 		{
 			if (Main.netMode != NetmodeID.Server)
 				return;
@@ -1459,7 +1459,10 @@ namespace Augments
 			TrophyHunterKilledTypes.Clear();
 			if (tag.ContainsKey("trophyHunterKilledTypes"))
 				TrophyHunterKilledTypes.UnionWith(tag.GetList<int>("trophyHunterKilledTypes"));
-			LuckyFindCopperGained = tag.ContainsKey("luckyFindCopperGained") ? tag.GetInt("luckyFindCopperGained") : 0;
+			// Convert handles both the old Int32 save value and the current Int64 value.
+			LuckyFindCopperGained = tag.ContainsKey("luckyFindCopperGained")
+				? System.Convert.ToInt64(tag["luckyFindCopperGained"])
+				: 0;
 
 			// Migration: old saves stored these inside augment custom data.
 			if (tag.ContainsKey("augmentCustomData"))
