@@ -368,7 +368,7 @@ namespace Augments
 		{
 			var ap = Main.LocalPlayer.GetModPlayer<AugmentPlayer>();
 			capNoticeText.SetText(ap.Owned.Count >= AugmentPlayer.MaxOwnedAugments
-				? "Augment slots full - selection will be sold to Mommy 2B."
+				? "Augment slots full - selection will be sold to Mistress 2B."
 				: "");
 		}
 

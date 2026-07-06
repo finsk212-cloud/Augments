@@ -71,6 +71,11 @@ namespace Augments
 		// still be granted directly via the /augment command.
 		public virtual bool IsDebugOnly => false;
 
+		// True for augments that can never be sold/removed once acquired
+		// (e.g. the Avatar augments) - the vendor's Remove list shows these
+		// with a "(Permanent)" label instead of a working sell button.
+		public virtual bool IsPermanent => false;
+
 		// True for augments whose effect operates on a proximity radius around the
 		// owner — used by AugmentAuraDrawer to decide whether to show the aura circle.
 		public virtual bool HasAuraEffect => false;
@@ -361,5 +366,25 @@ namespace Augments
 		// return false to skip consuming that ammo this shot. Default true
 		// (consume normally).
 		public virtual bool CanConsumeAmmo(Player player, Item weapon, Item ammo) => true;
+
+		// Reforging only ever happens through the local reforge UI acting on
+		// Main.LocalPlayer - AugmentGlobalItem forwards these three hooks
+		// straight from GlobalItem, passing Main.LocalPlayer along so augment
+		// code reads the same as every other hook here despite GlobalItem's
+		// own signatures not taking a Player. reforgePrice/canApplyDiscount
+		// are the same ref parameters ItemLoader.ReforgePrice exposes -
+		// mutate reforgePrice directly to change the price, and always leave
+		// this returning true (a false return skips ALL ReforgePrice hooks'
+		// effects for that reforge, including vanilla's own happiness
+		// discount, not just this one).
+		public virtual bool ReforgePrice(Player player, Item item, ref int reforgePrice, ref bool canApplyDiscount) => true;
+
+		// Fires right before vanilla resets and rerolls the item's prefix -
+		// item.prefix here is still the OLD prefix, the correct place to
+		// snapshot "what it was before this reforge".
+		public virtual void PreReforge(Player player, Item item) { }
+
+		// Fires right after the new prefix (and its stat bonuses) are fully applied.
+		public virtual void PostReforge(Player player, Item item) { }
 	}
 }

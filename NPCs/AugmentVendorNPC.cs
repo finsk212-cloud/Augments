@@ -1,7 +1,4 @@
 using System.Collections.Generic;
-using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics;
-using ReLogic.Content;
 using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
@@ -14,103 +11,21 @@ namespace Augments
     // a planned later refinement.
     public class AugmentVendorNPC : ModNPC
     {
-        // TEMPORARY PLACEHOLDER ART: no mod-owned sprite exists yet, so this
-        // points at the Stylist's own vanilla texture instead of a file in
-        // this mod, for anything PreDraw below doesn't cover (head icon,
-        // minimap, bestiary, etc). tModLoader can load a vanilla asset path
-        // this way without requiring an asset file under this mod's folders -
-        // replace with a real "NPCs/AugmentVendorNPC" png (and drop this
-        // override and the recolor logic below) once actual art exists.
-        public override string Texture => "Terraria/Images/NPC_" + NPCID.Stylist;
-
-        // Recolored copy of the Stylist's sprite sheet (white hair, black
-        // clothing), built once on first draw and cached for the rest of the
-        // session. See GetRecoloredTexture for honest caveats about how
-        // approximate this color match actually is.
-        private static Texture2D recoloredTexture;
-
-        // Anchor colors and tolerances are an informed GUESS (auburn/copper
-        // hair, dark dress), not a verified pixel sample - this sandboxed
-        // environment has no way to download the live game texture or any
-        // image file and inspect its actual raw pixels, only to read text
-        // descriptions of it. Treat this as a first-pass approximation that
-        // needs a real in-game look before trusting it.
-        private static readonly Color HairAnchor = new Color(150, 70, 45);
-        private const float HairTolerance = 70f;
-
-        private static readonly Color ClothingAnchor = new Color(25, 20, 25);
-        private const float ClothingTolerance = 55f;
-
-        private static Texture2D GetRecoloredTexture()
-        {
-            if (recoloredTexture != null)
-                return recoloredTexture;
-
-            // TextureAssets.Npc[NPCID.Stylist] is only requested with DoNotLoad
-            // by vanilla until a real Stylist is on-screen, so .Value would
-            // hand back a 1x1 placeholder here - request it directly with
-            // ImmediateLoad to force the real pixel data to load synchronously.
-            Texture2D source = ModContent.Request<Texture2D>("Terraria/Images/NPC_" + NPCID.Stylist, AssetRequestMode.ImmediateLoad).Value;
-
-            var pixels = new Color[source.Width * source.Height];
-            source.GetData(pixels);
-
-            for (int i = 0; i < pixels.Length; i++)
-            {
-                Color pixel = pixels[i];
-                if (pixel.A == 0)
-                    continue;
-
-                if (ColorDistance(pixel, HairAnchor) <= HairTolerance)
-                    pixels[i] = new Color(255, 255, 255, pixel.A);
-                else if (ColorDistance(pixel, ClothingAnchor) <= ClothingTolerance)
-                    pixels[i] = new Color(0, 0, 0, pixel.A);
-            }
-
-            recoloredTexture = new Texture2D(Main.graphics.GraphicsDevice, source.Width, source.Height);
-            recoloredTexture.SetData(pixels);
-            return recoloredTexture;
-        }
-
-        private static float ColorDistance(Color a, Color b)
-        {
-            float dr = a.R - b.R;
-            float dg = a.G - b.G;
-            float db = a.B - b.B;
-            return (float)System.Math.Sqrt(dr * dr + dg * dg + db * db);
-        }
-
-        public override bool PreDraw(SpriteBatch spriteBatch, Vector2 screenPos, Color drawColor)
-        {
-            Texture2D texture = GetRecoloredTexture();
-            int frameHeight = texture.Height / Main.npcFrameCount[NPCID.Stylist];
-            // NPC.frame.Y is already the absolute pixel offset of the current
-            // frame within the sheet (the vanilla animation code sets it to
-            // frameHeight * frameIndex), not a frame index - use it directly
-            // instead of multiplying by frameHeight again, or the source rect
-            // ends up entirely outside the texture and draws nothing.
-            var sourceRect = new Rectangle(0, NPC.frame.Y, texture.Width, frameHeight);
-            var origin = new Vector2(sourceRect.Width * 0.5f, sourceRect.Height * 0.5f);
-
-            spriteBatch.Draw(
-                texture,
-                NPC.Center - screenPos,
-                sourceRect,
-                drawColor,
-                NPC.rotation,
-                origin,
-                NPC.scale,
-                NPC.spriteDirection == 1 ? SpriteEffects.FlipHorizontally : SpriteEffects.None,
-                0f);
-
-            return false;
-        }
+        // Own sprite sheet, drawn to match the Stylist's frame layout (40px
+        // wide, 23 frames) so vanilla's Stylist-driven animation indexing in
+        // NPC.frame.Y still lines up. Every type in this mod uses the flat
+        // "Augments" namespace regardless of its folder, so the default
+        // ModTexturedType.Texture (namespace+name based) would resolve to
+        // "Augments/AugmentVendorNPC" - override explicitly to point at the
+        // actual file under NPCs/. The head icon at NPCs/AugmentVendorNPC_Head.png
+        // is found by tModLoader via the "_Head" suffix on this same path.
+        public override string Texture => "Augments/NPCs/AugmentVendorNPC";
 
         public override void SetStaticDefaults()
         {
             // Frame count/animation are copied from the Stylist to match the
-            // recolored texture above - update both together once this NPC
-            // has its own sprite sheet.
+            // sprite sheet above - update both together if the sheet's frame
+            // count ever changes.
             Main.npcFrameCount[Type] = Main.npcFrameCount[NPCID.Stylist];
         }
 
@@ -145,7 +60,7 @@ namespace Augments
         {
             return new List<string>
             {
-                "Mommy 2B"
+                "Mistress 2B"
             };
         }
 
@@ -153,9 +68,26 @@ namespace Augments
         {
             string[] lines =
             {
-                "I've heard whispers of strange augments out there. Wish I knew more.",
-                "Don't mind the mess - I'm still settling in.",
-                "No wares to show yet. Check back later."
+                "Glory to mankind.",
+                "Emotions are prohibited... but I can make an exception.",
+                "Mission parameters unclear. Are you staring, or requesting assistance?",
+                "This world is strange. The slimes are inefficient, and the humans are worse.",
+                "Careful. I was designed for combat, not cuddling.",
+                "Hostile lifeforms detected. Also, your posture needs work.",
+                "I do not require affection. However... I will allow it.",
+                "Your heartbeat increased. Should I run a diagnostic?",
+                "Operator, this outfit is tactical. Mostly.",
+                "I have scanned this world. Conclusion: everyone here needs supervision.",
+                "Do not confuse obedience with weakness.",
+                "Combat data updated. Flirting data still incomplete.",
+                "You keep visiting. Is this strategy, or something else?",
+                "Touching the android without permission may result in disciplinary action.",
+                "I was built to protect humanity. You are making that difficult.",
+                "Another endless cycle. At least you are entertaining.",
+                "Your equipment requires optimization. Your confidence does not.",
+                "Stay close. For tactical reasons, obviously.",
+                "My blade is sharp. My patience is not.",
+                "Request denied. Ask nicer."
             };
 
             return lines[Main.rand.Next(lines.Length)];

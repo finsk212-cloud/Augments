@@ -37,7 +37,9 @@ namespace Augments
 
             if (Main.rand.NextFloat() < ExtraHeartDropChance * effectiveness)
             {
-                Item.NewItem(target.GetSource_Loot(), target.Hitbox, ItemID.Heart);
+                int index = Item.NewItem(target.GetSource_Loot(), target.Hitbox, ItemID.Heart);
+                if (Main.netMode != NetmodeID.SinglePlayer)
+                    NetMessage.SendData(MessageID.SyncItem, number: index);
             }
         }
     }

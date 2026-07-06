@@ -47,7 +47,9 @@ namespace Augments
                 return;
 
             int coinCount = Main.rand.Next(MinCoins, MaxCoins + 1);
-            Item.NewItem(npc.GetSource_Loot(), npc.Hitbox, ItemID.SilverCoin, coinCount);
+            int index = Item.NewItem(npc.GetSource_Loot(), npc.Hitbox, ItemID.SilverCoin, coinCount);
+            if (Main.netMode != NetmodeID.SinglePlayer)
+                NetMessage.SendData(MessageID.SyncItem, number: index);
         }
     }
 }

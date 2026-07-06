@@ -29,13 +29,17 @@ namespace Augments
 			nameText.Left.Set(10f, 0f);
 			Append(nameText);
 
-			var actionButton = new ActionButton(actionLabel);
+			// onAction is null for permanent augments - the row shows a
+			// "(Permanent)" label with no working action, rather than a
+			// live Remove button.
+			var actionButton = new ActionButton(actionLabel, disabled: onAction == null);
 			actionButton.Width.Set(150f, 0f);
 			actionButton.Height.Set(0f, 0.7f);
 			actionButton.HAlign = 1f;
 			actionButton.VAlign = 0.5f;
 			actionButton.Left.Set(-10f, 0f);
-			actionButton.Clicked += () => onAction(augment);
+			if (onAction != null)
+				actionButton.Clicked += () => onAction(augment);
 			Append(actionButton);
 		}
 
@@ -61,19 +65,25 @@ namespace Augments
 		{
 			public event Action Clicked;
 
+			private readonly bool disabled;
+
 			private static readonly Color IdleColor = new Color(60, 70, 110);
 			private static readonly Color HoverColor = new Color(90, 105, 160);
+			private static readonly Color DisabledColor = new Color(50, 50, 55);
 
-			public ActionButton(string label)
+			public ActionButton(string label, bool disabled = false)
 			{
+				this.disabled = disabled;
+
 				SetPadding(0f);
-				BackgroundColor = IdleColor;
-				BorderColor = Color.White * 0.4f;
+				BackgroundColor = disabled ? DisabledColor : IdleColor;
+				BorderColor = Color.White * (disabled ? 0.2f : 0.4f);
 
 				UIText labelText = new UIText(label, 0.75f)
 				{
 					HAlign = 0.5f,
-					VAlign = 0.5f
+					VAlign = 0.5f,
+					TextColor = disabled ? Color.White * 0.6f : Color.White
 				};
 				Append(labelText);
 			}
@@ -81,19 +91,21 @@ namespace Augments
 			public override void LeftClick(UIMouseEvent evt)
 			{
 				base.LeftClick(evt);
-				Clicked?.Invoke();
+				if (!disabled)
+					Clicked?.Invoke();
 			}
 
 			public override void MouseOver(UIMouseEvent evt)
 			{
 				base.MouseOver(evt);
-				BackgroundColor = HoverColor;
+				if (!disabled)
+					BackgroundColor = HoverColor;
 			}
 
 			public override void MouseOut(UIMouseEvent evt)
 			{
 				base.MouseOut(evt);
-				BackgroundColor = IdleColor;
+				BackgroundColor = disabled ? DisabledColor : IdleColor;
 			}
 		}
 	}

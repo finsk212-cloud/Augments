@@ -15,6 +15,7 @@ namespace Augments
         public override AugmentClass Class => AugmentClass.Universal;
 
         public override string KeystoneFamily => "path_of_the_berserker";
+        public override bool IsPermanent => true;
 
         private const float MaxBonusDamagePercent = 0.6f;
         private const float HealCapPercent = 0.5f;

@@ -14,6 +14,7 @@ namespace Augments
         public override AugmentClass Class => AugmentClass.Universal;
 
         public override string KeystoneFamily => "path_of_the_berserker";
+        public override bool IsPermanent => true;
 
         private const int DefenseBonus = 10;
         private const float BonusDamagePercent = 0.10f;

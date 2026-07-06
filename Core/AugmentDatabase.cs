@@ -61,6 +61,8 @@ namespace Augments
             Register(new ApexPredatorAugment());
             Register(new StormcallerAugment());
             Register(new GuardiansWrathAugment());
+            Register(new FinalStandAugment());
+            Register(new ReforgersPatienceAugment());
             Register(new SpectralGuardAugment());
             Register(new SharpshooterAugment());
             Register(new ScavengersLuckAugment());

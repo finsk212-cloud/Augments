@@ -15,12 +15,13 @@ namespace Augments
 	{
 		private UIPanel backPanel;
 		private UIText essenceText;
+		private UndoReforgeBar undoReforgeBar;
 		private UIList buyBackList;
 		private UIList removeList;
 
 		private const float PanelWidth = 760f;
-		private const float PanelHeight = 440f;
-		private const float ListsTop = 90f;
+		private const float PanelHeight = 470f;
+		private const float ListsTop = 120f;
 
 		public override void OnInitialize()
 		{
@@ -52,12 +53,22 @@ namespace Augments
 			essenceText.Top.Set(34f, 0f);
 			backPanel.Append(essenceText);
 
+			// Only shown/enabled while Reforger's Patience is owned AND a
+			// valid pending undo exists - hidden entirely otherwise so the
+			// panel looks unchanged for players without the augment.
+			undoReforgeBar = new UndoReforgeBar(TryUndoReforge);
+			undoReforgeBar.Width.Set(-20f, 1f);
+			undoReforgeBar.HAlign = 0.5f;
+			undoReforgeBar.Top.Set(58f, 0f);
+			undoReforgeBar.Height.Set(30f, 0f);
+			backPanel.Append(undoReforgeBar);
+
 			UIText buyBackHeader = new UIText("Buy")
 			{
 				HAlign = 0f
 			};
 			buyBackHeader.Left.Set(10f, 0f);
-			buyBackHeader.Top.Set(62f, 0f);
+			buyBackHeader.Top.Set(92f, 0f);
 			backPanel.Append(buyBackHeader);
 
 			UIText removeHeader = new UIText("Remove")
@@ -65,7 +76,7 @@ namespace Augments
 				HAlign = 0f
 			};
 			removeHeader.Left.Set(15f, 0.5f);
-			removeHeader.Top.Set(62f, 0f);
+			removeHeader.Top.Set(92f, 0f);
 			backPanel.Append(removeHeader);
 
 			buyBackList = new UIList();
@@ -133,15 +144,40 @@ namespace Augments
 
 			foreach (var augment in augmentPlayer.Owned)
 			{
-				int removeRefund = AugmentPlayer.GetRemoveRefund(augment.Rarity);
-				string label = removeRefund > 0 ? $"Remove (+{removeRefund} Essence)" : "Remove (Free)";
-				var entry = new AugmentShopEntry(augment, label, SellOwned);
+				AugmentShopEntry entry;
+				if (augment.IsPermanent)
+				{
+					entry = new AugmentShopEntry(augment, "(Permanent)", null);
+				}
+				else
+				{
+					int removeRefund = AugmentPlayer.GetRemoveRefund(augment.Rarity);
+					string label = removeRefund > 0 ? $"Remove (+{removeRefund} Essence)" : "Remove (Free)";
+					entry = new AugmentShopEntry(augment, label, SellOwned);
+				}
 				entry.Width.Set(0f, 1f);
 				entry.Height.Set(50f, 0f);
 				removeList.Add(entry);
 			}
 
 			RefreshEssenceText();
+			RefreshUndoReforgeBar();
+		}
+
+		private void RefreshUndoReforgeBar()
+		{
+			var augmentPlayer = Main.LocalPlayer.GetModPlayer<AugmentPlayer>();
+			bool owns = augmentPlayer.HasAugment("reforgers_patience");
+			bool pending = owns && augmentPlayer.HasPendingReforgeUndo;
+
+			undoReforgeBar.SetState(owns, pending, pending ? augmentPlayer.LastReforgedItem : null, pending ? augmentPlayer.LastReforgeCost : 0);
+		}
+
+		private void TryUndoReforge()
+		{
+			var augmentPlayer = Main.LocalPlayer.GetModPlayer<AugmentPlayer>();
+			if (augmentPlayer.TryUndoLastReforge())
+				RefreshUndoReforgeBar();
 		}
 
 		private void RefreshEssenceText()
@@ -224,6 +260,78 @@ namespace Augments
 			{
 				base.MouseOut(evt);
 				BackgroundColor = IdleColor;
+			}
+		}
+
+		// "Undo Reforge" row for Reforger's Patience. Entirely hidden for
+		// players who don't own the augment (matches how permanent-augment
+		// rows only appear in the Remove list for owners), and shown but
+		// disabled with an explanatory label when the augment is owned but
+		// there's nothing valid to undo (no reforge yet this session, or the
+		// item was sold/dropped/reforged again since).
+		private class UndoReforgeBar : UIPanel
+		{
+			private readonly Action onUndo;
+			private readonly UIText labelText;
+
+			private static readonly Color IdleColor = new Color(60, 70, 110);
+			private static readonly Color HoverColor = new Color(90, 105, 160);
+			private static readonly Color DisabledColor = new Color(50, 50, 55);
+
+			private bool enabled;
+
+			public UndoReforgeBar(Action onUndo)
+			{
+				this.onUndo = onUndo;
+
+				SetPadding(0f);
+				BorderColor = Color.White * 0.4f;
+
+				labelText = new UIText("", 0.75f)
+				{
+					HAlign = 0.5f,
+					VAlign = 0.5f
+				};
+				Append(labelText);
+			}
+
+			// owns = player owns Reforger's Patience at all (false hides the
+			// row entirely). pending/item/cost describe an actual undoable
+			// reforge - when pending is false the row shows but is disabled.
+			public void SetState(bool owns, bool pending, Item item, int cost)
+			{
+				Width.Set(0f, owns ? 1f : 0f);
+				Height.Set(owns ? 30f : 0f, 0f);
+
+				if (!owns)
+					return;
+
+				enabled = pending;
+				BackgroundColor = pending ? IdleColor : DisabledColor;
+				labelText.TextColor = pending ? Color.White : Color.White * 0.6f;
+				labelText.SetText(pending
+					? $"Undo Reforge: {item.Name} (+{Main.ValueToCoins(cost)})"
+					: "Undo Reforge: nothing to undo");
+			}
+
+			public override void LeftClick(UIMouseEvent evt)
+			{
+				base.LeftClick(evt);
+				if (enabled)
+					onUndo();
+			}
+
+			public override void MouseOver(UIMouseEvent evt)
+			{
+				base.MouseOver(evt);
+				if (enabled)
+					BackgroundColor = HoverColor;
+			}
+
+			public override void MouseOut(UIMouseEvent evt)
+			{
+				base.MouseOut(evt);
+				BackgroundColor = enabled ? IdleColor : DisabledColor;
 			}
 		}
 	}

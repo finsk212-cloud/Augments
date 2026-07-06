@@ -4,11 +4,12 @@ Keybinds: {
 	DebugSpawnVendor.DisplayName: Debug Spawn Vendor
 	DebugToggleShop.DisplayName: Debug Toggle Shop
 	Cleanse.DisplayName: Cleanse
+	UndoReforge.DisplayName: Undo Reforge
 }
 
 NPCs: {
 	AugmentVendorNPC: {
-		DisplayName: Augment Vendor N P C
+		DisplayName: Mistress 2B
 
 		TownNPCMood: {
 			Content: I am content.

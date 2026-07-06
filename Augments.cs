@@ -46,6 +46,7 @@ namespace Augments
 		public static ModKeybind DebugSpawnVendorKeybind;
 		public static ModKeybind DebugToggleShopKeybind;
 		public static ModKeybind CleanseKeybind;
+		public static ModKeybind UndoReforgeKeybind;
 
 		public override void Load()
 		{
@@ -55,6 +56,7 @@ namespace Augments
 			DebugSpawnVendorKeybind = KeybindLoader.RegisterKeybind(this, "DebugSpawnVendor", "OemSemicolon");
 			DebugToggleShopKeybind = KeybindLoader.RegisterKeybind(this, "DebugToggleShop", "OemQuotes");
 			CleanseKeybind = KeybindLoader.RegisterKeybind(this, "Cleanse", "None");
+			UndoReforgeKeybind = KeybindLoader.RegisterKeybind(this, "UndoReforge", "None");
 
 			// Registered manually, in this exact order, instead of relying on
 			// autoload - AugmentFesteringWoundsNPC's UpdateLifeRegen must run
@@ -72,6 +74,7 @@ namespace Augments
 			DebugSpawnVendorKeybind = null;
 			DebugToggleShopKeybind = null;
 			CleanseKeybind = null;
+			UndoReforgeKeybind = null;
 		}
 
 		public override void HandlePacket(BinaryReader reader, int whoAmI)

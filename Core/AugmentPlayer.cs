@@ -108,7 +108,18 @@ namespace Augments
 
 		public bool SellAugmentByIdServerAuthoritative(string id, bool sync = true)
 		{
-			if (Main.netMode == NetmodeID.MultiplayerClient || !ownedIds.Remove(id))
+			if (Main.netMode == NetmodeID.MultiplayerClient)
+				return false;
+
+			// Permanent augments (e.g. Avatar of Rage/Balance/the Wall) can
+			// never be sold/removed once acquired - checked before removing
+			// from ownedIds so a permanent augment is never even briefly
+			// pulled out of the owned set.
+			Augment preCheck = AugmentDatabase.GetById(id);
+			if (preCheck != null && preCheck.IsPermanent)
+				return false;
+
+			if (!ownedIds.Remove(id))
 				return false;
 
 			Augment augment = AugmentDatabase.GetById(id);
@@ -127,8 +138,8 @@ namespace Augments
 				SpawnEssenceRefund(refund);
 
 			string soldMessage = refund > 0
-				? $"{augment.DisplayName} sold to Mommy 2B - received {refund} Augment Essence."
-				: $"{augment.DisplayName} sold to Mommy 2B. Available to buy back later.";
+				? $"{augment.DisplayName} sold to Mistress 2B - received {refund} Augment Essence."
+				: $"{augment.DisplayName} sold to Mistress 2B. Available to buy back later.";
 			NotifyPlayer(soldMessage, new Color(180, 220, 255));
 
 			if (sync && Main.netMode == NetmodeID.Server)
@@ -159,7 +170,7 @@ namespace Augments
 			RebuildOwnedCacheFromOwnedIdsOnly();
 			augment.OnAcquire(Player);
 
-			NotifyPlayer($"{augment.DisplayName} bought back from Mommy 2B.", new Color(255, 215, 0));
+			NotifyPlayer($"{augment.DisplayName} bought back from Mistress 2B.", new Color(255, 215, 0));
 
 			if (Main.netMode == NetmodeID.Server)
 				SyncInventory();
@@ -198,8 +209,8 @@ namespace Augments
 					SpawnEssenceRefund(refund);
 
 				string msg = refund > 0
-					? $"{augment.DisplayName} sold to Mommy 2B - received {refund} Augment Essence."
-					: $"{augment.DisplayName} sold to Mommy 2B. Available to buy back later.";
+					? $"{augment.DisplayName} sold to Mistress 2B - received {refund} Augment Essence."
+					: $"{augment.DisplayName} sold to Mistress 2B. Available to buy back later.";
 				NotifyPlayer(msg, new Color(180, 220, 255));
 
 				if (sync && Main.netMode == NetmodeID.Server)
@@ -320,6 +331,8 @@ namespace Augments
 		public int EldritchCovenantManaProgress;
 		public int EternalFlameBoostTicks;
 		public int FeatherfallSpeedBurstTicks;
+		public int FinalStandCooldown;
+		public int FinalStandActiveTicks;
 		public int FortunesFavorRegenTimer;
 		public int FrenziedAssaultStacks;
 		public int FrenziedAssaultResetTimer;
@@ -360,6 +373,17 @@ namespace Augments
 		public int PotionRushTimer;
 		public int QuickRecoveryRegenTimer;
 		public int RavenousSwarmSlotsGranted;
+		// One-slot "undo my last reforge" record for Reforger's Patience.
+		// Item is a live reference into the player's own inventory - not
+		// meaningful across a save/reload, so intentionally left out of
+		// SaveData/LoadData, same as every other volatile field on this list.
+		// LastReforgePendingCost is a scratch value bridging ReforgePrice
+		// (where the discounted price is computed) to PreReforge (where the
+		// old prefix is captured) within the same synchronous reforge call.
+		public Item LastReforgedItem;
+		public int LastReforgePrefix = -1;
+		public int LastReforgeCost;
+		public int LastReforgePendingCost;
 		public int RiposteWindowRemaining;
 		public int ScavengersLuckBuffTicks;
 		public int SecondWindCooldown;
@@ -572,6 +596,81 @@ namespace Augments
 				if (Main.netMode == NetmodeID.Server)
 					AugmentNet.SendSyncPlayer(Player);
 			}
+		}
+
+		// True while a valid, still-undoable reforge record exists - read by
+		// AugmentShopUIState to decide whether to show/enable the Undo
+		// Reforge row. Runs the same staleness check TryUndoLastReforge
+		// itself relies on, but without consuming or clearing the record.
+		public bool HasPendingReforgeUndo => LastReforgedItem != null && LastReforgePrefix >= 0 && IsStillInInventory(LastReforgedItem);
+
+		private bool IsStillInInventory(Item item)
+		{
+			foreach (Item invItem in Player.inventory)
+			{
+				if (invItem == item)
+					return true;
+			}
+
+			return false;
+		}
+
+		// Reforging itself is entirely client-local in vanilla (there's no
+		// request/response packet for it, and PreReforge/PostReforge just run
+		// straight off the local DrawInventory click) - undo mirrors that same
+		// shape, touching only the local player's own inventory item and
+		// their own coins, no server round-trip needed.
+		public bool TryUndoLastReforge()
+		{
+			if (LastReforgedItem == null || LastReforgePrefix < 0)
+				return false;
+
+			Item item = LastReforgedItem;
+
+			// Guard against undoing a stale record: the item must still be
+			// sitting in this player's own inventory, unchanged since the
+			// reforge that produced this record (a different reforge, a sold/
+			// dropped item, or a swapped-in different item all invalidate it).
+			if (!IsStillInInventory(item))
+			{
+				ClearLastReforgeRecord();
+				return false;
+			}
+
+			// Item.Prefix(int) doesn't just overwrite the prefix field, it
+			// also reapplies that prefix's stat multipliers (damage, crit,
+			// etc.) - a raw `item.prefix = x` assignment would leave the
+			// current (new) prefix's stat bonuses baked into the item while
+			// only the displayed prefix number changed. ResetPrefix() first
+			// strips those before Prefix() reapplies the restored one,
+			// exactly mirroring vanilla's own reforge call sequence.
+			item.ResetPrefix();
+			item.Prefix(LastReforgePrefix);
+
+			int cost = LastReforgeCost;
+			if (cost > 0)
+			{
+				int[] coins = Utils.CoinsSplit(cost);
+				if (coins[0] > 0)
+					Player.QuickSpawnItem(Player.GetSource_FromThis(), ItemID.CopperCoin, coins[0]);
+				if (coins[1] > 0)
+					Player.QuickSpawnItem(Player.GetSource_FromThis(), ItemID.SilverCoin, coins[1]);
+				if (coins[2] > 0)
+					Player.QuickSpawnItem(Player.GetSource_FromThis(), ItemID.GoldCoin, coins[2]);
+				if (coins[3] > 0)
+					Player.QuickSpawnItem(Player.GetSource_FromThis(), ItemID.PlatinumCoin, coins[3]);
+			}
+
+			NotifyPlayer("Reforge undone - previous prefix and cost restored.", new Color(180, 220, 255));
+			ClearLastReforgeRecord();
+			return true;
+		}
+
+		private void ClearLastReforgeRecord()
+		{
+			LastReforgedItem = null;
+			LastReforgePrefix = -1;
+			LastReforgeCost = 0;
 		}
 
 		public bool TryTriggerCleanseServer()
@@ -818,6 +917,14 @@ namespace Augments
 					packet.Write((byte)AugmentPacketType.CleanseRequest);
 					packet.Send();
 				}
+			}
+
+			if (HasAugment("reforgers_patience") && Augments.UndoReforgeKeybind?.JustPressed == true)
+			{
+				if (TryUndoLastReforge())
+					SoundEngine.PlaySound(SoundID.Item4, Player.Center);
+				else
+					Main.NewText("No reforge to undo.", 255, 80, 80);
 			}
 
 			// Debug: pop the reward choice UI without killing a boss. Endgame
@@ -1232,6 +1339,8 @@ namespace Augments
 			EldritchCovenantManaProgress = 0;
 			EternalFlameBoostTicks = 0;
 			FeatherfallSpeedBurstTicks = 0;
+			FinalStandCooldown = 0;
+			FinalStandActiveTicks = 0;
 			FortunesFavorRegenTimer = 0;
 			FrenziedAssaultStacks = 0;
 			FrenziedAssaultResetTimer = 0;
@@ -1272,6 +1381,10 @@ namespace Augments
 			PotionRushTimer = 0;
 			QuickRecoveryRegenTimer = 0;
 			RavenousSwarmSlotsGranted = 0;
+			LastReforgedItem = null;
+			LastReforgePrefix = -1;
+			LastReforgeCost = 0;
+			LastReforgePendingCost = 0;
 			RiposteWindowRemaining = 0;
 			ScavengersLuckBuffTicks = 0;
 			SecondWindCooldown = 0;
